@@ -87,7 +87,9 @@ def build_recipes(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def build_ingredient_tables(df: pd.DataFrame, recipe_ids: pd.Series) -> tuple[pd.DataFrame, pd.DataFrame]:
+def build_ingredient_tables(
+    df: pd.DataFrame, recipe_ids: pd.Series
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     rows = []
     for recipe_id, raw_ingredients in zip(recipe_ids, df["CKG_MTRL_CN"]):
         for item in parse_ingredient_text(raw_ingredients):
@@ -101,7 +103,9 @@ def build_ingredient_tables(df: pd.DataFrame, recipe_ids: pd.Series) -> tuple[pd
                     "unit": _fill_text(item["unit"]),
                 }
             )
-    recipe_ingredients = pd.DataFrame(rows, columns=["recipe_id", "ingredient_name", "amount", "unit"])
+    recipe_ingredients = pd.DataFrame(
+        rows, columns=["recipe_id", "ingredient_name", "amount", "unit"]
+    )
 
     unique_names = recipe_ingredients["ingredient_name"].unique()
     ingredients_master = pd.DataFrame(
