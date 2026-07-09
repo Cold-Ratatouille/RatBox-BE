@@ -11,16 +11,20 @@ class IngestionResult:
     recipes: pd.DataFrame
     ingredients_master: pd.DataFrame
     recipe_ingredients: pd.DataFrame
+    allergen_master: pd.DataFrame
 
 
 def process_csv(csv_path: Path) -> IngestionResult:
     df = load_recipe_search_csv(csv_path)
 
     recipes_df = build_recipes(df)
-    recipe_ingredients_df, ingredients_master_df = build_ingredient_tables(df, recipes_df["id"])
+    recipe_ingredients_df, ingredients_master_df, allergen_master_df = build_ingredient_tables(
+        df, recipes_df
+    )
 
     return IngestionResult(
-        recipes=recipes_df,
+        recipes=recipes_df.reset_index(drop=True),
         ingredients_master=ingredients_master_df,
         recipe_ingredients=recipe_ingredients_df,
+        allergen_master=allergen_master_df,
     )
