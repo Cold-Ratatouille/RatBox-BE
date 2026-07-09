@@ -15,3 +15,4 @@ REQUIRED_SOURCE_COLUMNS = [
 TABLE_RECIPES = "recipes"
 TABLE_INGREDIENTS_MASTER = "ingredients_master"
 TABLE_RECIPE_INGREDIENTS = "recipe_ingredients"
+TABLE_ALLERGEN_MASTER = "allergen_master"

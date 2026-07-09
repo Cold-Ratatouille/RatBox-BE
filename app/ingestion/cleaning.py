@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.ingestion.constants import ALLERGEN_MAPPING, SYNONYM_TO_STANDARD, get_ingredient_category
+from app.ingestion.allergens import build_allergen_master, resolve_allergen_id
+from app.ingestion.constants import (
+    EXCLUDED_INGREDIENT_NAMES,
+    SYNONYM_TO_STANDARD,
+    get_ingredient_category,
+)
 from app.ingestion.ingredient_parser import parse_ingredient_text
 from app.ingestion.schemas import REQUIRED_SOURCE_COLUMNS, SOURCE_CSV_ENCODING
 from app.ingestion.validators import require_columns
@@ -14,17 +19,14 @@ _SERVINGS_PATTERN = re.compile(r"(\d+)")
 _HOURS_PATTERN = re.compile(r"(\d+)\s*시간")
 _MINUTES_PATTERN = re.compile(r"(\d+)\s*분")
 
-# DB의 NOT NULL 컬럼인데 원본 CSV에는 값이 없는 행이 있어, 행을 버리지 않고 기본값으로 채운다.
-DEFAULT_TEXT_FALLBACK = "미확인"
-DEFAULT_NUMBER_FALLBACK = 0
-
-
-def _fill_text(value) -> str:
-    return value if isinstance(value, str) and value.strip() else DEFAULT_TEXT_FALLBACK
-
-
-def _fill_number(value) -> int | float:
-    return value if value is not None else DEFAULT_NUMBER_FALLBACK
+RECIPE_REQUIRED_FIELDS = [
+    "name",
+    "cooking_time",
+    "difficulty",
+    "servings",
+    "category",
+    "cooking_method",
+]
 
 
 def load_recipe_search_csv(filepath: Path) -> pd.DataFrame:
@@ -66,46 +68,70 @@ def build_recipes(df: pd.DataFrame) -> pd.DataFrame:
     # float64(NaN)로 업캐스트되어 Postgres INTEGER 컬럼에 "15.0" 형태로 들어가 실패한다.
     # 리스트 컴프리헨션 + dtype="object"로 만들어 원본 int/None 타입을 그대로 유지한다.
     cooking_time = pd.Series(
-        [_fill_number(parse_cooking_time_minutes(v)) for v in df["CKG_TIME_NM"]], dtype="object"
+        [parse_cooking_time_minutes(v) for v in df["CKG_TIME_NM"]], dtype="object", index=df.index
     )
     servings = pd.Series(
-        [_fill_number(parse_servings(v)) for v in df["CKG_INBUN_NM"]], dtype="object"
+        [parse_servings(v) for v in df["CKG_INBUN_NM"]], dtype="object", index=df.index
     )
 
-    return pd.DataFrame(
+    recipes = pd.DataFrame(
         {
             "id": [str(uuid.uuid4()) for _ in range(len(df))],
             "source_recipe_no": df["RCP_SNO"],
-            "name": df["CKG_NM"].apply(_fill_text),
+            "name": df["CKG_NM"],
             "cooking_time": cooking_time,
-            "difficulty": df["CKG_DODF_NM"].apply(_fill_text),
+            "difficulty": df["CKG_DODF_NM"],
             "servings": servings,
-            "category": df["CKG_KND_ACTO_NM"].apply(_fill_text),
-            "cooking_method": df["CKG_MTH_ACTO_NM"].apply(_fill_text),
+            "category": df["CKG_KND_ACTO_NM"],
+            "cooking_method": df["CKG_MTH_ACTO_NM"],
             "created_at": df["FIRST_REG_DT"].apply(parse_registered_at),
-        }
+        },
+        index=df.index,
+    )
+
+    # 필수 컬럼(NOT NULL) 중 원본에 값이 없던 행은 기본값을 채우지 않고 통째로 제외한다.
+    is_complete = recipes[RECIPE_REQUIRED_FIELDS].notna().all(axis=1)
+    # 재료 중 하나라도 이름/수량/단위가 불완전하면, 그 재료만 빼는 게 아니라 레시피 자체를 제외한다.
+    has_complete_ingredients = df["CKG_MTRL_CN"].apply(_all_ingredients_complete)
+    return recipes[is_complete & has_complete_ingredients]
+
+
+def _all_ingredients_complete(raw) -> bool:
+    items = parse_ingredient_text(raw)
+    if not items:
+        return False
+    return all(
+        item["name"]
+        and item["name"] not in EXCLUDED_INGREDIENT_NAMES
+        and item["amount"] is not None
+        and item["unit"] is not None
+        for item in items
     )
 
 
 def build_ingredient_tables(
-    df: pd.DataFrame, recipe_ids: pd.Series
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+    df: pd.DataFrame, recipes_df: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    included = df.loc[recipes_df.index]
+
     rows = []
-    for recipe_id, raw_ingredients in zip(recipe_ids, df["CKG_MTRL_CN"]):
+    for recipe_id, raw_ingredients in zip(recipes_df["id"], included["CKG_MTRL_CN"]):
         for item in parse_ingredient_text(raw_ingredients):
-            name = _fill_text(item["name"])
-            standard_name = SYNONYM_TO_STANDARD.get(name, name)
+            standard_name = SYNONYM_TO_STANDARD.get(item["name"], item["name"])
             rows.append(
                 {
                     "recipe_id": recipe_id,
                     "ingredient_name": standard_name,
-                    "amount": _fill_number(item["amount"]),
-                    "unit": _fill_text(item["unit"]),
+                    "amount": item["amount"],
+                    "unit": item["unit"],
                 }
             )
     recipe_ingredients = pd.DataFrame(
         rows, columns=["recipe_id", "ingredient_name", "amount", "unit"]
     )
+
+    allergen_master = build_allergen_master()
+    allergen_id_by_name = dict(zip(allergen_master["allergen_name"], allergen_master["id"]))
 
     unique_names = recipe_ingredients["ingredient_name"].unique()
     ingredients_master = pd.DataFrame(
@@ -113,7 +139,9 @@ def build_ingredient_tables(
             "id": [str(uuid.uuid4()) for _ in range(len(unique_names))],
             "name": unique_names,
             "ingredient_category": [get_ingredient_category(name) for name in unique_names],
-            "allergen_group": [ALLERGEN_MAPPING.get(name) for name in unique_names],
+            "allergen_id": [
+                resolve_allergen_id(name, allergen_id_by_name) for name in unique_names
+            ],
         }
     )
 
@@ -124,4 +152,4 @@ def build_ingredient_tables(
         is_required=True,
     )[["id", "recipe_id", "ingredient_id", "amount", "unit", "is_required"]]
 
-    return recipe_ingredients, ingredients_master
+    return recipe_ingredients, ingredients_master, allergen_master

@@ -6,12 +6,18 @@ _QUANTITY_START_PATTERN = re.compile(r"(\d|약간|조금|적당량|적당히|넉
 _QUANTITY_SPLIT_PATTERN = re.compile(r"^([\d/.+]+)\s*(.*)$")
 _CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x1f]+")
 _TRAILING_NOTE_PATTERN = re.compile(r"\(.*$")
+# "?"는 원본 CSV 자체에 깨진 기호(원래 다른 특수문자였던 것)로 남아있는 경우이고,
+# "大/中/小"는 크기 표시용 한자라 표준 재료명에는 불필요하다.
+_NOISE_CHAR_PATTERN = re.compile(r"[?？大中小]")
+_WHITESPACE_PATTERN = re.compile(r"\s+")
 
 
 def _clean_name(name: str) -> str:
     # "당근 (볶은것)", "통후추 (" 처럼 붙는 괄호 설명은 표준 재료명에 필요 없고,
     # "|" 분리 중 괄호가 끊기는 경우도 있어 짝이 안 맞을 수 있으므로 여는 괄호부터 통째로 제거한다.
     name = _TRAILING_NOTE_PATTERN.sub("", name)
+    name = _NOISE_CHAR_PATTERN.sub("", name)
+    name = _WHITESPACE_PATTERN.sub(" ", name)
     return name.strip(" ,")
 
 
