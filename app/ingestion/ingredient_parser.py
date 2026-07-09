@@ -5,6 +5,14 @@ _SECTION_PATTERN = re.compile(r"\[([^\]]+)\]([^\[]*)")
 _QUANTITY_START_PATTERN = re.compile(r"(\d|약간|조금|적당량|적당히|넉넉히|많이|조금씩)")
 _QUANTITY_SPLIT_PATTERN = re.compile(r"^([\d/.+]+)\s*(.*)$")
 _CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x1f]+")
+_TRAILING_NOTE_PATTERN = re.compile(r"\(.*$")
+
+
+def _clean_name(name: str) -> str:
+    # "당근 (볶은것)", "통후추 (" 처럼 붙는 괄호 설명은 표준 재료명에 필요 없고,
+    # "|" 분리 중 괄호가 끊기는 경우도 있어 짝이 안 맞을 수 있으므로 여는 괄호부터 통째로 제거한다.
+    name = _TRAILING_NOTE_PATTERN.sub("", name)
+    return name.strip(" ,")
 
 
 def _fraction_to_float(token: str) -> float | None:
@@ -32,13 +40,13 @@ def _fraction_to_float(token: str) -> float | None:
 def parse_ingredient_item(item: str) -> dict:
     match = _QUANTITY_START_PATTERN.search(item)
     if not match:
-        return {"name": item.strip(), "amount": None, "unit": None}
+        return {"name": _clean_name(item), "amount": None, "unit": None}
 
-    name = item[: match.start()].strip()
+    name = _clean_name(item[: match.start()])
     quantity = item[match.start() :].strip()
 
     if not name:
-        return {"name": item.strip(), "amount": None, "unit": None}
+        return {"name": _clean_name(item), "amount": None, "unit": None}
 
     qty_match = _QUANTITY_SPLIT_PATTERN.match(quantity)
     if qty_match and qty_match.group(1):

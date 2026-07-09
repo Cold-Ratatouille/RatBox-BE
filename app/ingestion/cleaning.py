@@ -91,7 +91,8 @@ def build_ingredient_tables(df: pd.DataFrame, recipe_ids: pd.Series) -> tuple[pd
     rows = []
     for recipe_id, raw_ingredients in zip(recipe_ids, df["CKG_MTRL_CN"]):
         for item in parse_ingredient_text(raw_ingredients):
-            standard_name = SYNONYM_TO_STANDARD.get(item["name"], item["name"])
+            name = _fill_text(item["name"])
+            standard_name = SYNONYM_TO_STANDARD.get(name, name)
             rows.append(
                 {
                     "recipe_id": recipe_id,
