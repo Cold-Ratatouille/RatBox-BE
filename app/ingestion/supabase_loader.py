@@ -18,7 +18,13 @@ def _clean_value(value):
     return value
 
 
-def load_dataframe(client: Client, table_name: str, df: pd.DataFrame, batch_size: int = 100, on_conflict: str | None = None) -> None:
+def load_dataframe(
+    client: Client,
+    table_name: str,
+    df: pd.DataFrame,
+    batch_size: int = 100,
+    on_conflict: str | None = None,
+) -> None:
     records = [
         {key: _clean_value(value) for key, value in record.items()}
         for record in df.to_dict(orient="records")
@@ -38,7 +44,9 @@ def load_dataframe(client: Client, table_name: str, df: pd.DataFrame, batch_size
         print(f"{table_name}: {min(i + batch_size, total)}/{total} 처리 완료")
 
 
-def _write_batch(client: Client, table_name: str, batch: list[dict], on_conflict: str | None) -> None:
+def _write_batch(
+    client: Client, table_name: str, batch: list[dict], on_conflict: str | None
+) -> None:
     query = client.table(table_name)
     if on_conflict:
         query.upsert(batch, on_conflict=on_conflict).execute()
