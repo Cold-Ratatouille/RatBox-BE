@@ -1,4 +1,18 @@
+from uuid import UUID
+
 from pydantic import BaseModel
+
+
+class User(BaseModel):
+    id: UUID
+    username: str
+    name: str
+
+
+class Allergen(BaseModel):
+    id: UUID
+    allergen_name: str
+    category: str
 
 
 class RecipeCandidate(BaseModel):
