@@ -20,6 +20,12 @@ class SignupResponse(BaseModel):
     name: str
 
 
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: SignupResponse
+
+
 class AllergenResponse(BaseModel):
     id: UUID
     allergen_name: str

@@ -1,10 +1,13 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
-from app.api.schemas.request import SignupRequest
-from app.api.schemas.response import SignupResponse
-from app.services.auth_service import UsernameTakenError, signup
+from app.api.schemas.request import LoginRequest, SignupRequest
+from app.api.schemas.response import LoginResponse, SignupResponse
+from app.core.config import settings
+from app.services.auth_service import InvalidCredentialsError, UsernameTakenError, login, signup
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+REFRESH_TOKEN_COOKIE = "refresh_token"
 
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
@@ -14,3 +17,27 @@ async def signup_route(payload: SignupRequest) -> SignupResponse:
     except UsernameTakenError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return SignupResponse(id=user.id, username=user.username, name=user.name)
+
+
+@router.post("/login", response_model=LoginResponse)
+async def login_route(payload: LoginRequest, response: Response) -> LoginResponse:
+    try:
+        user, access_token, refresh_token = login(
+            username=payload.username, password=payload.password
+        )
+    except InvalidCredentialsError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+    response.set_cookie(
+        key=REFRESH_TOKEN_COOKIE,
+        value=refresh_token,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
+        path="/auth",
+    )
+    return LoginResponse(
+        access_token=access_token,
+        user=SignupResponse(id=user.id, username=user.username, name=user.name),
+    )

@@ -14,6 +14,11 @@ class SignupRequest(BaseModel):
     name: str = Field(..., min_length=1, description="사용자 이름")
 
 
+class LoginRequest(BaseModel):
+    username: str = Field(..., description="로그인 아이디")
+    password: str = Field(..., description="비밀번호")
+
+
 class RegisterAllergensRequest(BaseModel):
     allergen_ids: list[UUID] = Field(
         default_factory=list,
