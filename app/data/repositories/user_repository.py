@@ -21,3 +21,10 @@ def create_user(username: str, password_hash: str, name: str) -> dict:
         .execute()
     )
     return response.data[0]
+
+
+def update_user(user_id: str, username: str | None = None, name: str | None = None) -> dict:
+    supabase = get_supabase()
+    updates = {k: v for k, v in {"username": username, "name": name}.items() if v is not None}
+    response = supabase.table("users").update(updates).eq("id", user_id).execute()
+    return response.data[0]

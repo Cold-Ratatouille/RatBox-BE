@@ -24,3 +24,8 @@ class RegisterAllergensRequest(BaseModel):
         default_factory=list,
         description="사용자가 선택한 알레르기 id 목록 (0개, 1개, 여러 개 모두 가능)",
     )
+
+
+class UpdateMyInfoRequest(BaseModel):
+    username: str | None = Field(None, min_length=4, max_length=20, description="로그인 아이디")
+    name: str | None = Field(None, min_length=1, description="사용자 이름")

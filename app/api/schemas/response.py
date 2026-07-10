@@ -39,3 +39,10 @@ class AllergenResponse(BaseModel):
 
 class UserAllergensResponse(BaseModel):
     allergens: list[AllergenResponse]
+
+
+class MyInfoResponse(BaseModel):
+    id: UUID
+    username: str
+    name: str
+    allergens: list[AllergenResponse]
