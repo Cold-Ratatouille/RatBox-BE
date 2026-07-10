@@ -10,3 +10,9 @@ class RecipeSummary(BaseModel):
 class RecommendResponse(BaseModel):
     recipes: list[RecipeSummary]
     message: str
+
+
+class SignupResponse(BaseModel):
+    id: str
+    username: str
+    name: str

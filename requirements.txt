@@ -4,3 +4,4 @@ supabase
 pydantic-settings
 python-dotenv
 pandas
+bcrypt

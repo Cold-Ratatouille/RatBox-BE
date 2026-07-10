@@ -1,6 +1,12 @@
 from pydantic import BaseModel
 
 
+class User(BaseModel):
+    id: str
+    username: str
+    name: str
+
+
 class RecipeCandidate(BaseModel):
     id: int
     name: str
