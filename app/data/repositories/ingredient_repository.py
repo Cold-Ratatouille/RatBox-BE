@@ -1,6 +1,17 @@
 from app.data.supabase_client import get_supabase
 
 
+def find_all_ingredients() -> list[dict]:
+    supabase = get_supabase()
+    response = (
+        supabase.table("ingredients_master")
+        .select("id, name, description, allergen_master(id, allergen_name, category)")
+        .order("name")
+        .execute()
+    )
+    return response.data
+
+
 def resolve_ingredient_id(name: str) -> int | None:
     supabase = get_supabase()
 

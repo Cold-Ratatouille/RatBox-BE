@@ -41,6 +41,13 @@ class UserAllergensResponse(BaseModel):
     allergens: list[AllergenResponse]
 
 
+class IngredientResponse(BaseModel):
+    id: UUID
+    name: str
+    description: str | None = None
+    allergen: AllergenResponse | None = None
+
+
 class MyInfoResponse(BaseModel):
     id: UUID
     username: str
