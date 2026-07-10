@@ -6,6 +6,7 @@ from app.core.security import (
     verify_password,
 )
 from app.data.repositories.refresh_token_repository import (
+    delete_refresh_token,
     find_user_id_by_refresh_token,
     store_refresh_token,
 )
@@ -57,3 +58,8 @@ def refresh_access_token(refresh_token: str) -> str:
         raise InvalidRefreshTokenError("유효하지 않거나 만료된 refresh token입니다.")
 
     return create_access_token(user_id=user_id)
+
+
+def logout(refresh_token: str | None) -> None:
+    if refresh_token:
+        delete_refresh_token(refresh_token)

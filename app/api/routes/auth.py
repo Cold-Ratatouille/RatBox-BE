@@ -8,6 +8,7 @@ from app.services.auth_service import (
     InvalidRefreshTokenError,
     UsernameTakenError,
     login,
+    logout,
     refresh_access_token,
     signup,
 )
@@ -65,3 +66,12 @@ async def refresh_route(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
     return RefreshResponse(access_token=access_token)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout_route(
+    response: Response,
+    refresh_token: str | None = Cookie(default=None, alias=REFRESH_TOKEN_COOKIE),
+) -> None:
+    logout(refresh_token)
+    response.delete_cookie(key=REFRESH_TOKEN_COOKIE, path="/auth")
