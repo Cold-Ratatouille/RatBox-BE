@@ -24,3 +24,7 @@ class AllergenResponse(BaseModel):
     id: UUID
     allergen_name: str
     category: str
+
+
+class UserAllergensResponse(BaseModel):
+    allergens: list[AllergenResponse]
