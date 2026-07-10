@@ -29,7 +29,9 @@ def fetch_all(table: str, columns: str) -> list[dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="기존 ingredients_master 행의 allergen_id만 재계산해 갱신 (id/name은 건드리지 않음)"
+        description=(
+            "기존 ingredients_master 행의 allergen_id만 재계산해 갱신 (id/name은 건드리지 않음)"
+        )
     )
     parser.add_argument(
         "--apply", action="store_true", help="실제로 Supabase에 반영 (기본값은 dry-run)"
