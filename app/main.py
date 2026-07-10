@@ -8,7 +8,20 @@ from app.api.routes.user import router as user_router
 from app.api.routes.user_allergen import router as user_allergen_router
 from app.core.cors import add_cors
 
-app = FastAPI(title="RatBox API")
+OPENAPI_TAGS = [
+    {"name": "auth", "description": "회원가입/로그인/토큰 재발급"},
+    {"name": "users", "description": "내 정보 조회·수정, 내 알레르기 등록"},
+    {"name": "allergens", "description": "알레르기 성분 마스터 조회"},
+    {"name": "ingredients", "description": "재료 마스터 조회, 재료 선택 최종 확인"},
+    {"name": "recommend", "description": "재료 기반 레시피 추천 (LangGraph Agent)"},
+]
+
+app = FastAPI(
+    title="RatBox API",
+    description="냉따뚜이 — 재료 기반 레시피 추천 및 대체재 안내 API",
+    version="0.1.0",
+    openapi_tags=OPENAPI_TAGS,
+)
 add_cors(app)
 app.include_router(auth_router)
 app.include_router(allergen_router)
