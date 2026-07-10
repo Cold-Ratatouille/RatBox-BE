@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel
 
 
@@ -13,6 +15,12 @@ class RecommendResponse(BaseModel):
 
 
 class SignupResponse(BaseModel):
-    id: str
+    id: UUID
     username: str
     name: str
+
+
+class AllergenResponse(BaseModel):
+    id: UUID
+    allergen_name: str
+    category: str
