@@ -29,3 +29,7 @@ class RegisterAllergensRequest(BaseModel):
 class UpdateMyInfoRequest(BaseModel):
     username: str | None = Field(None, min_length=4, max_length=20, description="로그인 아이디")
     name: str | None = Field(None, min_length=1, description="사용자 이름")
+
+
+class ConfirmIngredientSelectionRequest(BaseModel):
+    ingredient_ids: list[UUID] = Field(..., description="사용자가 화면에서 선택한 재료 id 목록")

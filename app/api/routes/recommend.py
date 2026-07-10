@@ -4,7 +4,7 @@ from app.agent.graph import run_agent
 from app.api.schemas.request import RecommendRequest
 from app.api.schemas.response import RecipeSummary, RecommendResponse
 
-router = APIRouter()
+router = APIRouter(tags=["recommend"])
 
 
 @router.post("/recommend", response_model=RecommendResponse)
