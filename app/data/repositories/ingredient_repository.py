@@ -12,6 +12,19 @@ def find_all_ingredients() -> list[dict]:
     return response.data
 
 
+def find_ingredients_by_ids(ingredient_ids: list[str]) -> list[dict]:
+    if not ingredient_ids:
+        return []
+    supabase = get_supabase()
+    response = (
+        supabase.table("ingredients_master")
+        .select("id, name, description, allergen_master(id, allergen_name, category)")
+        .in_("id", ingredient_ids)
+        .execute()
+    )
+    return response.data
+
+
 def resolve_ingredient_id(name: str) -> int | None:
     supabase = get_supabase()
 
