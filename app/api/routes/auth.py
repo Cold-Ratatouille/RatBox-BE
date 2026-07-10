@@ -1,9 +1,16 @@
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, HTTPException, Response, status
 
 from app.api.schemas.request import LoginRequest, SignupRequest
-from app.api.schemas.response import LoginResponse, SignupResponse
+from app.api.schemas.response import LoginResponse, RefreshResponse, SignupResponse
 from app.core.config import settings
-from app.services.auth_service import InvalidCredentialsError, UsernameTakenError, login, signup
+from app.services.auth_service import (
+    InvalidCredentialsError,
+    InvalidRefreshTokenError,
+    UsernameTakenError,
+    login,
+    refresh_access_token,
+    signup,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -41,3 +48,20 @@ async def login_route(payload: LoginRequest, response: Response) -> LoginRespons
         access_token=access_token,
         user=SignupResponse(id=user.id, username=user.username, name=user.name),
     )
+
+
+@router.post("/refresh", response_model=RefreshResponse)
+async def refresh_route(
+    refresh_token: str | None = Cookie(default=None, alias=REFRESH_TOKEN_COOKIE),
+) -> RefreshResponse:
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="refresh token이 없습니다."
+        )
+
+    try:
+        access_token = refresh_access_token(refresh_token)
+    except InvalidRefreshTokenError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+    return RefreshResponse(access_token=access_token)

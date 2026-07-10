@@ -26,6 +26,11 @@ class LoginResponse(BaseModel):
     user: SignupResponse
 
 
+class RefreshResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
 class AllergenResponse(BaseModel):
     id: UUID
     allergen_name: str

@@ -5,7 +5,10 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.data.repositories.refresh_token_repository import store_refresh_token
+from app.data.repositories.refresh_token_repository import (
+    find_user_id_by_refresh_token,
+    store_refresh_token,
+)
 from app.data.repositories.user_repository import create_user, find_user_by_username
 from app.domain.models import User
 
@@ -15,6 +18,10 @@ class UsernameTakenError(Exception):
 
 
 class InvalidCredentialsError(Exception):
+    pass
+
+
+class InvalidRefreshTokenError(Exception):
     pass
 
 
@@ -42,3 +49,11 @@ def login(username: str, password: str) -> tuple[User, str, str]:
     )
 
     return user, access_token, refresh_token
+
+
+def refresh_access_token(refresh_token: str) -> str:
+    user_id = find_user_id_by_refresh_token(refresh_token)
+    if not user_id:
+        raise InvalidRefreshTokenError("유효하지 않거나 만료된 refresh token입니다.")
+
+    return create_access_token(user_id=user_id)
