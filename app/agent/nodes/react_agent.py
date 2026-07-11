@@ -2,6 +2,7 @@
 스스로 선택해 호출하도록 LLM에 bind_tools 한다."""
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langfuse import observe
 
 from app.agent.prompts.react_agent_prompt import REACT_AGENT_SYSTEM_PROMPT
 from app.agent.state import AgentState
@@ -9,6 +10,7 @@ from app.agent.tools.registry import ALL_TOOLS
 from app.core.llm import get_llm
 
 
+@observe(name="react_agent", as_type="generation")
 def react_agent(state: AgentState) -> dict:
     new_messages = []
     if not state.messages:

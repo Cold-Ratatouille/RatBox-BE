@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     refresh_token_expire_days: int = 14
     cookie_secure: bool = False
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_base_url: str = "https://cloud.langfuse.com"
 
     class Config:
         env_file = ".env"

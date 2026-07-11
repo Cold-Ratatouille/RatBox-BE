@@ -1,3 +1,5 @@
+from langfuse import observe
+
 from app.agent.prompts.generate_sql_prompt import build_generate_sql_prompt
 from app.agent.tools.schemas import ExecuteSQLOutput, GenerateSQLInput, GenerateSQLOutput
 from app.core.llm import get_llm
@@ -5,12 +7,14 @@ from app.data.sql_executor import execute_readonly_sql, validate_select_only
 from app.domain.models import RecipeCandidate
 
 
+@observe(name="generate_sql", as_type="generation")
 def generate_sql(payload: GenerateSQLInput) -> GenerateSQLOutput:
     prompt = build_generate_sql_prompt(payload.ingredients, payload.strategy)
     llm = get_llm().with_structured_output(GenerateSQLOutput)
     return llm.invoke(prompt)
 
 
+@observe(name="execute_sql", as_type="tool")
 def execute_sql(sql: str) -> ExecuteSQLOutput:
     try:
         validate_select_only(sql)

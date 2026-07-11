@@ -1,8 +1,11 @@
+from langfuse import observe
+
 from app.agent.prompts.substitute_prompt import SUBSTITUTE_PROMPT
 from app.agent.tools.schemas import FindSubstitutesOutput
 from app.core.llm import get_llm
 
 
+@observe(name="find_substitutes", as_type="generation")
 def find(
     ingredient_name: str,
     recipe_name: str,
