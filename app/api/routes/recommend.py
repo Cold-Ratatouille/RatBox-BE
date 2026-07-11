@@ -10,7 +10,7 @@ from app.api.schemas.response import (
     SubstituteSummary,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["recommend"])
 
 
 @router.post("/recommend", response_model=RecommendResponse)

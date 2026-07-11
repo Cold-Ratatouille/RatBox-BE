@@ -9,3 +9,6 @@ langchain-core
 langchain-upstage
 sqlglot
 psycopg2-binary
+bcrypt
+PyJWT
+redis

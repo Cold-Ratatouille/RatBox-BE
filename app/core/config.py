@@ -8,6 +8,12 @@ class Settings(BaseSettings):
     sql_statement_timeout_ms: int = 5000
     upstage_api_key: str = ""
     upstage_model: str = "solar-pro2"
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 30
+    redis_url: str = "redis://localhost:6379/0"
+    refresh_token_expire_days: int = 14
+    cookie_secure: bool = False
 
     class Config:
         env_file = ".env"
