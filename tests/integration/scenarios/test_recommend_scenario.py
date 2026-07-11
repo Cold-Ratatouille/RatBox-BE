@@ -68,7 +68,11 @@ def _script_relaxed_retry(sql: str):
         AIMessage(
             content="",
             tool_calls=[
-                {"name": "generate_sql", "args": {"ingredients": [], "strategy": "exact"}, "id": "c1"}
+                {
+                    "name": "generate_sql",
+                    "args": {"ingredients": [], "strategy": "exact"},
+                    "id": "c1",
+                }
             ],
         ),
         AIMessage(

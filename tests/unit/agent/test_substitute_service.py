@@ -42,7 +42,9 @@ def test_find_includes_exclude_ingredients_in_prompt(monkeypatch):
     fake_llm = _FakeLLM(expected)
     monkeypatch.setattr(substitute_service, "get_llm", lambda: fake_llm)
 
-    substitute_service.find("양파", "토마토야채스프", "국/탕", exclude_ingredients=["마늘", "샐러리"])
+    substitute_service.find(
+        "양파", "토마토야채스프", "국/탕", exclude_ingredients=["마늘", "샐러리"]
+    )
 
     assert "마늘" in fake_llm.last_structured.last_prompt
     assert "샐러리" in fake_llm.last_structured.last_prompt

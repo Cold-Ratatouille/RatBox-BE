@@ -49,7 +49,10 @@ class FindSubstitutesInput(BaseModel):
     recipe_context: str | None = Field(None, description="레시피의 조리 맥락(카테고리, 조리법 등)")
     exclude_ingredients: list[str] = Field(
         default_factory=list,
-        description="이미 이 레시피에 쓰이는 다른 재료명 목록. 대체재로 추천하면 안 됨(이미 쓰이고 있어 무의미).",
+        description=(
+            "이미 이 레시피에 쓰이는 다른 재료명 목록. "
+            "대체재로 추천하면 안 됨(이미 쓰이고 있어 무의미)."
+        ),
     )
 
 
