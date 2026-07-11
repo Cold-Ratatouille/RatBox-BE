@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.domain.models import RecipeCandidate, SubstituteCandidate
@@ -5,6 +7,14 @@ from app.domain.models import RecipeCandidate, SubstituteCandidate
 
 class GenerateSQLInput(BaseModel):
     ingredients: list[str] = Field(..., description="사용자가 목록에서 선택한 재료명 목록")
+    strategy: Literal["exact", "relaxed"] = Field(
+        "exact",
+        description=(
+            "exact: 보유 재료가 하나라도 겹치는 레시피를 정확한 이름 매칭으로 찾는다. "
+            "relaxed: exact로 0건이 나왔을 때, 재료 카테고리 기준으로 조건을 완화해 다시 찾는다. "
+            "재료가 흔하고 대체 가능성이 높을 때만 relaxed를 선택하라."
+        ),
+    )
 
 
 class GenerateSQLOutput(BaseModel):
