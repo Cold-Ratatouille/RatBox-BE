@@ -1,23 +1,44 @@
 from pydantic import BaseModel, Field
 
-from app.domain.models import RecipeCandidate
+from app.domain.models import RecipeCandidate, SubstituteCandidate
 
 
-class SearchRecipesInput(BaseModel):
-    ingredients: list[str] = Field(..., description="사용자가 보유한 재료명 목록")
-    excluded_ingredients: list[str] = Field(default_factory=list)
+class GenerateSQLInput(BaseModel):
+    ingredients: list[str] = Field(..., description="사용자가 목록에서 선택한 재료명 목록")
 
 
-class SearchRecipesOutput(BaseModel):
+class GenerateSQLOutput(BaseModel):
+    sql: str = Field(
+        ..., description="recipes/recipe_ingredients/ingredients_master만 참조하는 단일 SELECT문"
+    )
+
+
+class ExecuteSQLInput(BaseModel):
+    sql: str = Field(..., description="generate_sql이 만든 SELECT문")
+
+
+class ExecuteSQLOutput(BaseModel):
     recipes: list[RecipeCandidate]
+    error: str | None = Field(None, description="검증/실행 실패 시 에러 메시지, 성공 시 None")
 
 
 class ClassifyMissingInput(BaseModel):
-    recipe_id: int
+    recipe_id: str
     available_ingredients: list[str]
 
 
 class ClassifyMissingOutput(BaseModel):
-    required: list[str]
-    optional: list[str]
-    reason: str
+    required: list[str] = Field(..., description="빠지면 조리가 불가능한 필수 재료명")
+    optional: list[str] = Field(..., description="없어도 조리 가능한 생략 가능 재료명")
+    reason: str = Field(..., description="필수/생략가능 판단 근거")
+
+
+class FindSubstitutesInput(BaseModel):
+    ingredient_name: str = Field(..., description="대체재를 찾을 부족 재료명")
+    recipe_name: str = Field(..., description="이 재료가 쓰이는 레시피명")
+    recipe_context: str | None = Field(None, description="레시피의 조리 맥락(카테고리, 조리법 등)")
+
+
+class FindSubstitutesOutput(BaseModel):
+    substitutes: list[SubstituteCandidate]
+    reason: str = Field(..., description="대체재 제안 근거")

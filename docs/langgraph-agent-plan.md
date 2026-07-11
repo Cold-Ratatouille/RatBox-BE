@@ -1,109 +1,155 @@
-# LangGraph Agent 구현 계획 — Pydantic Tool Schema + ReAct Loop + Service Layer
+# LangGraph Agent 구현 계획 — Text-to-SQL + SQL 안전장치 + 2단계 추천 흐름
 
-> 대상 범위: 자연어 재료 입력 → 도구 기반 판단 → 재료 부족 분류/대체재 탐색 → 검증 → 응답 생성까지의 LangGraph 에이전트 코어.
+> 대상 범위: 재료 ID·알레르기 ID 입력 → 레시피 후보 3개 추천 → 사용자 선택 → 선택 레시피 상세 판단(생략/대체) → 검증 → 응답 생성, 그리고 조리 중 STT 음성 질의(B흐름)까지의 LangGraph 에이전트 코어.
 > 전체 로드맵(Day1~7) 중 **2단계(MVP)~4단계(검증)**, 즉 Day3~6에 해당하는 부분을 구체화한다. Day1~2 데이터 적재, Day7 배포는 본 문서 범위 밖.
 
 ## 0. 설계 원칙
 
-- **Tool은 얇게, Service는 두껍게.** Tool은 Pydantic 스키마 검증 + Service 호출만 담당하고, 실제 DB 쿼리/비즈니스 로직은 Service Layer에 둔다. 이렇게 하면 Tool을 LangGraph 없이도(유닛 테스트에서) 직접 호출 가능.
+- **Tool은 얇게, Service는 두껍게.** Tool은 Pydantic 스키마 검증 + Service 호출만 담당하고, 실제 DB 쿼리·비즈니스 로직은 Service Layer에 둔다. 이렇게 하면 Tool을 LangGraph 없이도(유닛 테스트에서) 직접 호출 가능.
 - **판단은 구조화된 출력으로.** 분류·검증처럼 LLM이 판단하는 단계는 반드시 Pydantic 모델로 구조화된 출력을 받는다(자유 텍스트 파싱 금지).
-- **Text-to-SQL은 "자유 SQL 생성"이 아니라 "파라미터화된 쿼리 빌더"로 구현.** LLM이 원시 SQL 문자열을 생성해 실행하는 방식은 SQL Injection·비용 폭주 리스크가 크다. 대신 LLM이 필터 조건(재료 ID, 제외 재료, 조리시간 등)을 구조화 출력으로 뽑고, Service가 이를 안전한 Supabase 쿼리로 변환하는 방식을 기본값으로 한다. (진짜 자유 SQL이 필요하면 읽기 전용 DB 계정 + 화이트리스트 검증을 별도 단계로 추가)
-- **ReAct 루프는 LangGraph의 조건부 엣지로 명시.** `agent → (tool_calls 있으면) tool_node → agent → ... → (tool_calls 없으면) validate → respond` 구조를 그래프로 명시적으로 그린다.
+- **Text-to-SQL은 LLM이 SQL을 직접 생성하는 방식(Option A)으로 구현한다.** 수업 목표(LLMOps·LangGraph 실습)상 Agent가 도구를 스스로 판단·실행하는 걸 보여줘야 하므로, "파라미터화된 쿼리 빌더"가 아니라 실제 자유 SQL 생성을 채택한다. 대신 실행 전 반드시 안전장치(읽기 전용 role, 화이트리스트 검증, 쿼리 타임아웃)를 거친다.
+- **재료·알레르기는 프론트에서 ID 목록으로 전달받아 그대로 사용한다.** 자유 텍스트 파싱, 동의어 정규화, 서버 측 `user_id` 기반 알레르기 조회는 하지 않는다.
+- **세션 상태(Checkpointer)를 사용하지 않는 Stateless 설계.** `ingredient_ids`/`allergy_ids`/`recipe_id`를 매 요청 파라미터로 전달받으며, 멀티턴 재판단·대화 상태 누적은 다루지 않는다.
+- **ReAct 루프는 두 개의 독립된 진입점(그래프)으로 나뉜다.** "후보 추천" 그래프는 검색만, "선택 레시피 상세" 그래프는 분류·대체재 판단만 담당한다. 이렇게 나누는 이유는 대체재 판단(LLM 호출)을 선택되지 않은 후보에는 수행하지 않기 위함이다(불필요한 LLM 호출 절감).
 
-## 1. 디렉토리 구조 (제안)
+## 1. 디렉토리 구조
 
 ```
 RatBox-BE/app/
-├── main.py                      # FastAPI 앱, 라우터 등록만
+├── main.py                          # FastAPI 앱, 라우터 등록만
 ├── api/
 │   └── routes/
-│       └── chat.py              # POST /chat (SSE) 엔드포인트
+│       ├── recommend.py             # POST /recipes/recommend (1단계, SSE)
+│       ├── detail.py                # POST /recipes/{recipe_id}/detail (2단계, SSE)
+│       └── voice_query.py           # POST /cooking/voice-query (B흐름, 단발 응답)
 ├── agents/
-│   ├── state.py                 # AgentState (Pydantic) 정의
-│   ├── graph.py                 # build_graph(): 노드/엣지 조립
+│   ├── state.py                     # RecommendState, DetailState, VoiceQueryState (Pydantic)
+│   ├── graph.py                     # build_recommend_graph(), build_detail_graph(), build_voice_query_graph()
 │   └── nodes/
 │       ├── input_guardrail.py
-│       ├── extract.py           # 재료/알레르기 추출 (LLM, structured output)
-│       ├── react_agent.py       # ReAct 판단 노드 (tool binding)
-│       ├── validate.py          # 제약 위반 재검증
+│       ├── react_agent.py           # ReAct 판단 노드 (Tool binding, 그래프별로 분리 사용)
+│       ├── validate.py              # 제약(알레르기) 위반 재검증
 │       ├── output_guardrail.py
-│       └── respond.py           # 최종 자연어 응답 생성
+│       └── respond.py               # 최종 응답 생성 (SSE/단발 공용)
 ├── tools/
-│   ├── schemas.py                # 모든 Tool의 Input/Output Pydantic 스키마
-│   ├── recipe_tools.py           # search_recipes (Text-to-SQL 대체)
-│   ├── classification_tools.py   # classify_missing_ingredients
-│   ├── substitute_tools.py       # find_substitutes
-│   ├── rag_tools.py               # search_similar_recipes (pgvector)
-│   └── registry.py               # ALL_TOOLS = [...] (LLM에 bind)
+│   ├── schemas.py                   # 모든 Tool의 Input/Output Pydantic 스키마
+│   ├── sql_tools.py                 # generate_sql, execute_sql (Text-to-SQL + 안전장치 경유)
+│   ├── classification_tools.py      # classify_missing_ingredients
+│   ├── substitute_tools.py          # find_substitutes (LLM 판단, DB 조회 아님)
+│   └── registry.py                  # RECOMMEND_TOOLS, DETAIL_TOOLS, VOICE_TOOLS
 ├── services/
-│   ├── ingredient_service.py     # 재료 정규화/동의어 매핑
-│   ├── recipe_service.py         # 레시피 후보 검색 쿼리
-│   ├── substitute_service.py     # 대체재 탐색
-│   ├── guardrail_service.py      # 입력/출력 가드레일 판정 로직
-│   └── rag_service.py            # pgvector 유사도 검색
+│   ├── sql_safety_service.py        # 읽기 전용 role 연결, 화이트리스트 검증(sqlglot), 쿼리 타임아웃
+│   ├── recipe_service.py            # SQL 실행 결과 파싱 + 알레르기 필터링 + 부족재료 개수 정렬(상위 3개)
+│   ├── substitute_service.py        # LLM 기반 대체재/생략가능 판단
+│   └── guardrail_service.py         # 입력/출력 가드레일 판정 로직
 ├── schemas/
-│   └── domain.py                 # Ingredient, Recipe, Allergy 등 공용 도메인 모델
+│   └── domain.py                    # Ingredient, Recipe, Allergen 등 공용 도메인 모델
 ├── core/
-│   ├── llm.py                    # LLM 클라이언트 팩토리 (Claude/GPT, function calling)
-│   └── checkpointer.py           # LangGraph Checkpointer 설정
+│   └── llm.py                       # Upstage Solar Pro(ChatUpstage) 클라이언트 팩토리
 └── db/
-    └── supabase_client.py        # (기존)
+    ├── supabase_client.py           # 기존 (쓰기 가능 role, 필요한 경우만 사용)
+    └── supabase_readonly_client.py  # 신규, DATABASE_URL_READONLY(ratbox_readonly) 사용
 ```
+
+**기존 대비 삭제된 것**: `services/ingredient_service.py`(동의어 정규화), `services/rag_service.py`, `tools/rag_tools.py`, `core/checkpointer.py`. `nodes/extract.py`(자연어 재료 추출)도 삭제 — 입력이 이미 ID 목록이라 추출 자체가 불필요.
 
 ## 2. 단계별 구현 계획
 
 ### Step 1 — State 스키마 정의 (`agents/state.py`)
 
-멀티턴 동안 유지되는 그래프 state를 Pydantic으로 명시한다.
+그래프별로 필요한 state만 최소한으로 정의한다. Checkpointer가 없으므로 각 state는 요청 하나의 생명주기 동안만 존재한다.
 
 ```python
-class AgentState(BaseModel):
-    messages: list[AnyMessage]          # ReAct 루프의 대화/도구 호출 기록
-    ingredients: list[str] = []          # 사용자가 가진 재료
-    excluded_ingredients: list[str] = []  # "빼줘" 로 제외된 재료
-    allergies: list[str] = []
+class RecommendState(BaseModel):
+    messages: list[AnyMessage]
+    ingredient_ids: list[str]
+    allergy_ids: list[str] = []
     candidate_recipes: list[RecipeCandidate] = []
-    missing_classification: ClassificationResult | None = None
-    substitutes: list[SubstituteResult] = []
     guardrail_blocked: bool = False
     guardrail_reason: str | None = None
     final_answer: str | None = None
+
+class DetailState(BaseModel):
+    messages: list[AnyMessage]
+    recipe_id: str
+    allergy_ids: list[str] = []
+    missing_classification: ClassificationResult | None = None
+    substitutes: list[SubstituteResult] = []
+    guardrail_blocked: bool = False
+    final_answer: str | None = None
+
+class VoiceQueryState(BaseModel):
+    messages: list[AnyMessage]
+    recipe_id: str
+    allergy_ids: list[str] = []
+    target_ingredient: str | None = None
+    intent: Literal["substitute", "omit_check"] | None = None
+    final_answer: str | None = None
 ```
 
-- `messages`는 `add_messages` reducer로 누적(LangGraph의 `Annotated[list, add_messages]`).
-- 나머지 필드는 turn마다 override 되는 필드와 누적되는 필드를 구분해 reducer를 다르게 지정(예: `excluded_ingredients`는 append, `candidate_recipes`는 override).
+- `messages`만 `add_messages` reducer로 누적, 나머지 필드는 override.
+- 멀티턴/누적 로직(`excluded_ingredients` 등)은 제거되었다 — 후속 피드백 재판단 루프는 이번 범위에서 다루지 않기 때문.
 
-**DoD**: `AgentState`가 pydantic으로 정의되고, 최소 1개 유닛 테스트로 reducer 동작(누적 vs 덮어쓰기) 확인.
+**DoD**: 세 State가 각각 Pydantic으로 정의되고, `messages` reducer 동작을 확인하는 유닛 테스트.
 
-### Step 2 — Service Layer 구현 (`services/*.py`)
+### Step 2 — SQL 안전장치 서비스 (`services/sql_safety_service.py`) — 최우선 구현
 
-기존 `app/main.py`의 `get_ingredient_id` 로직을 `IngredientService`로 이전하고, 나머지 Service를 신규 작성.
+LLM이 SQL을 직접 생성하는 방식을 채택했으므로, Tool 구현보다 먼저 안전장치부터 갖춘다.
 
-- `IngredientService.resolve(name: str) -> IngredientMatch | None`: `ingredients_master` → `ingredient_synonyms` 순으로 조회. 매칭 실패 시 유사 문자열(예: `pg_trgm` 또는 rapidfuzz) 기반 후보 반환 → 상위 레이어에서 "확인 질문" 분기에 사용.
-- `RecipeService.search(ingredient_ids, exclude_ids=None, max_cooking_time=None) -> list[RecipeCandidate]`: `recipe_ingredients` 조인 쿼리를 파라미터 기반으로 구성.
-- `SubstituteService.find(ingredient_id) -> list[SubstituteCandidate]`: 대체재 테이블(신규 설계 필요, 예: `ingredient_substitutes(ingredient_id, substitute_id, note)`) 조회.
-- `GuardrailService.check_input(text) -> GuardrailVerdict`: 욕설/무관 입력 판정(키워드 블록리스트 + LLM 판정 이중화).
-- `GuardrailService.filter_allergens(recipes, allergies) -> (filtered, violations)`: 알레르기 재료 하드 필터링.
-- `RagService.similar_recipes(recipe_id | query_embedding, top_k) -> list[RecipeCandidate]`: pgvector 코사인 유사도 검색.
-
-**DoD**: 각 Service에 Supabase 없이도 동작 확인 가능한 유닛 테스트(Supabase 클라이언트는 mock/fixture로 대체) 작성. `SubstituteService`가 참조할 테이블 스키마를 이 단계에서 확정.
-
-### Step 3 — Pydantic Tool Schema 정의 (`tools/schemas.py`)
-
-각 Tool의 Input/Output을 명시적 Pydantic 모델로 정의하고, LLM function calling에 그대로 노출한다.
+- `ratbox_readonly` 읽기 전용 DB role 커넥션 준비 (`DATABASE_URL_READONLY`)
+- 생성된 SQL을 `sqlglot` 등으로 파싱해 다음을 검증:
+  - `SELECT`문인지 (INSERT/UPDATE/DELETE/DROP 등 원천 차단)
+  - 화이트리스트 테이블(`recipes`, `recipe_ingredients`, `ingredients_master`, `allergen_master`)만 접근하는지
+- 쿼리 타임아웃 설정 (`statement_timeout`)
 
 ```python
-class SearchRecipesInput(BaseModel):
-    ingredients: list[str] = Field(..., description="사용자가 보유한 재료명 목록")
-    excluded_ingredients: list[str] = Field(default_factory=list)
-    max_cooking_time: int | None = Field(None, description="분 단위")
+class SQLSafetyService:
+    ALLOWED_TABLES = {"recipes", "recipe_ingredients", "ingredients_master", "allergen_master"}
 
-class SearchRecipesOutput(BaseModel):
-    recipes: list[RecipeCandidate]
+    def validate(self, sql: str) -> SQLValidationResult:
+        parsed = sqlglot.parse_one(sql)
+        if parsed.key.upper() != "SELECT":
+            raise UnsafeSQLError("SELECT 문만 허용됩니다.")
+        tables = extract_table_names(parsed)
+        if not tables.issubset(self.ALLOWED_TABLES):
+            raise UnsafeSQLError(f"허용되지 않은 테이블 접근: {tables - self.ALLOWED_TABLES}")
+        return SQLValidationResult(is_safe=True)
+```
+
+**DoD**: SQL Injection 시도 문자열, DDL(`DROP TABLE`), DML(`DELETE FROM`), 화이트리스트 밖 테이블 접근 시도가 전부 거부되는 유닛 테스트. 정상 SELECT 쿼리는 통과하는 테스트도 함께.
+
+### Step 3 — Service Layer 구현 (`services/*.py`)
+
+- `RecipeService.search_by_sql(sql: str) -> list[RecipeRow]`: `sql_safety_service.validate()` 통과 후 읽기 전용 커넥션으로 실행.
+- `RecipeService.filter_by_allergy(recipes, allergy_ids) -> list[RecipeCandidate]`: `ingredients_master.allergen_id`가 `allergy_ids`에 해당하는 재료가 포함된 레시피 제외.
+- `RecipeService.sort_by_missing_count(recipes, ingredient_ids) -> list[RecipeCandidate]`: 레시피별 부족 재료 개수를 계산해 오름차순 정렬 후 상위 3개 반환.
+- `SubstituteService.judge(ingredient_name, recipe_context, intent) -> JudgmentResult`: DB 조회가 아닌 LLM 호출로 "생략 가능한가" 또는 "대체재는 무엇인가"를 판단 (B흐름의 생략가능 질의도 이 Service를 공유).
+- `GuardrailService.check_input(payload) -> GuardrailVerdict`: 부적절 요청 판정.
+- `GuardrailService.filter_allergens(result, allergy_ids) -> (filtered, violations)`: 알레르기 재료 하드 필터링.
+
+**DoD**: Supabase 없이도 동작 확인 가능한 유닛 테스트(mock/fixture). 특히 `sort_by_missing_count`의 정렬 로직과 `filter_by_allergy`의 제외 로직을 중점적으로 테스트.
+
+### Step 4 — Pydantic Tool Schema 정의 (`tools/schemas.py`)
+
+```python
+class GenerateSQLInput(BaseModel):
+    ingredient_ids: list[str] = Field(..., description="사용자가 선택한 재료 ID 목록")
+    schema_context: str = Field(..., description="쿼리 대상 테이블 스키마 설명")
+
+class GenerateSQLOutput(BaseModel):
+    sql: str
+    설명: str
+
+class ExecuteSQLInput(BaseModel):
+    sql: str
+
+class ExecuteSQLOutput(BaseModel):
+    rows: list[dict]
+    row_count: int
 
 class ClassifyMissingInput(BaseModel):
-    recipe_id: int
-    available_ingredients: list[str]
+    recipe_id: str
+    ingredient_ids: list[str]
 
 class ClassifyMissingOutput(BaseModel):
     필수재료: list[str]
@@ -112,91 +158,109 @@ class ClassifyMissingOutput(BaseModel):
 
 class FindSubstitutesInput(BaseModel):
     ingredient_name: str
-    recipe_id: int | None = None
+    recipe_id: str
 
 class FindSubstitutesOutput(BaseModel):
-    substitutes: list[SubstituteCandidate]
+    대체재: list[str]
     이유: str
 ```
 
-- `ClassifyMissingOutput`처럼 **판단이 들어가는 출력은 반드시 `이유` 필드를 포함**(PRD 요구사항 — 근거 명시).
-- 각 스키마는 `docstring`/`Field(description=...)`를 촘촘히 채운다 — 이게 그대로 LLM에 전달되는 tool spec이 되므로 설명 품질이 tool 선택 정확도에 직결.
+- `ClassifyMissingOutput`, `FindSubstitutesOutput`처럼 **판단이 들어가는 출력은 반드시 `이유` 필드를 포함**한다(근거 명시 원칙).
+- 각 스키마는 `Field(description=...)`를 촘촘히 채운다 — Solar Pro의 `bind_tools`에 그대로 전달되는 tool spec이 되므로 설명 품질이 tool 선택 정확도에 직결된다.
 
-**DoD**: 모든 스키마에 `model_config = {"json_schema_extra": {...}}` 또는 `Field(description=...)`가 채워져 있고, `model_json_schema()` 출력을 눈으로 확인.
+**DoD**: 모든 스키마에 description이 채워져 있고, `model_json_schema()` 출력을 눈으로 확인. Solar Pro(`ChatUpstage`)의 `with_structured_output`/`bind_tools`로 스모크 테스트.
 
-### Step 4 — Tool 구현 (`tools/*.py`)
-
-LangChain `@tool` 데코레이터 + `args_schema`로 Step 2 Service를 감싼다.
+### Step 5 — Tool 구현 (`tools/*.py`)
 
 ```python
-@tool("search_recipes", args_schema=SearchRecipesInput)
-def search_recipes(ingredients: list[str], excluded_ingredients: list[str] = [], max_cooking_time: int | None = None) -> SearchRecipesOutput:
-    ids = [ingredient_service.resolve(n) for n in ingredients]
-    ...
-    return SearchRecipesOutput(recipes=recipe_service.search(ids, ...))
+@tool("generate_sql", args_schema=GenerateSQLInput)
+def generate_sql(ingredient_ids: list[str], schema_context: str) -> GenerateSQLOutput:
+    ...  # LLM 호출로 SQL 생성
+
+@tool("execute_sql", args_schema=ExecuteSQLInput)
+def execute_sql(sql: str) -> ExecuteSQLOutput:
+    sql_safety_service.validate(sql)  # 실행 전 필수 검증
+    rows = recipe_service.search_by_sql(sql)
+    return ExecuteSQLOutput(rows=rows, row_count=len(rows))
 ```
 
-`registry.py`에서 `ALL_TOOLS = [search_recipes, classify_missing_ingredients, find_substitutes, search_similar_recipes]`로 모아 ReAct 노드에 bind.
+`registry.py`에서 그래프별 Tool 목록을 분리한다:
+- `RECOMMEND_TOOLS = [generate_sql, execute_sql]`
+- `DETAIL_TOOLS = [classify_missing_ingredients, find_substitutes]`
+- `VOICE_TOOLS = [find_substitutes]` (B흐름은 대체재/생략 판단 Tool만 필요)
 
-**DoD**: 각 Tool을 LangGraph 없이 직접 `.invoke({...})` 호출해 스키마 검증 + Service 연동이 되는지 확인하는 유닛 테스트.
+**DoD**: 각 Tool을 LangGraph 없이 직접 `.invoke({...})` 호출해 스키마 검증 + Service 연동 확인. `execute_sql`에 안전장치를 우회하는 SQL을 넣었을 때 차단되는지 확인.
 
-### Step 5 — ReAct 루프 그래프 구성 (`agents/graph.py`, `nodes/react_agent.py`)
+### Step 6 — 그래프 구성 (`agents/graph.py`) — 2개 진입점 + B흐름
 
+**후보 추천 그래프**
 ```
-input_guardrail → extract → react_agent ⇄ tool_node → validate → output_guardrail → respond → END
-                     │(차단 시)                              
-                     └──────────────→ END (반려 메시지)
+input_guardrail → react_agent(RECOMMEND_TOOLS) ⇄ tool_node → filter+sort → respond(SSE, 3개 후보) → END
 ```
 
-- `react_agent` 노드: `llm.bind_tools(ALL_TOOLS)`로 호출 → 응답에 `tool_calls`가 있으면 `tool_node`로, 없으면(최종 답변 준비됨) `validate`로 조건부 라우팅(`add_conditional_edges`).
-- `tool_node`: LangGraph의 `ToolNode` 사용(또는 커스텀), 실행 결과를 `messages`에 `ToolMessage`로 append 후 다시 `react_agent`로 복귀 — 이게 "판단→도구선택→재판단" 루프.
-- 무한루프 방지: 그래프 실행 시 `recursion_limit` 설정 + `react_agent` 진입 횟수를 state에 카운트, 임계치 초과 시 안전 응답으로 강제 종료.
+**선택 레시피 상세 그래프**
+```
+react_agent(DETAIL_TOOLS) ⇄ tool_node → validate → output_guardrail → respond(SSE, 조리단계+대체재) → END
+```
 
-**DoD**: "계란, 밥, 김치 있고 새우 알레르기 있어" 입력 시 `search_recipes` → (필요시) `classify_missing_ingredients` → `find_substitutes` 순으로 도구가 실제 호출되는 것을 Langfuse/로그로 확인. 최소 3개 시나리오로 루프가 종료(무한루프 없음) 확인.
+**조리 중 음성 질의 그래프 (B흐름)**
+```
+react_agent(VOICE_TOOLS) ⇄ tool_node → validate(알레르기 충돌만 확인) → respond(단발 텍스트) → END
+```
 
-### Step 6 — 결과 검증 & 가드레일 노드
+- 세 그래프 모두 Checkpointer 없이, 요청마다 새로운 state 인스턴스로 실행된다.
+- `react_agent` 노드: `llm.bind_tools(TOOLS)` 호출 → `tool_calls` 있으면 `tool_node`로, 없으면 다음 단계로 조건부 라우팅.
+- 무한루프 방지: `recursion_limit` 설정 + 진입 횟수 카운트, 임계치 초과 시 안전 응답으로 강제 종료.
 
-- `validate` 노드: `guardrail_service.filter_allergens`로 최종 추천 목록에 알레르기 재료가 남아있는지 재검사. 남아있으면 `output_guardrail`에서 자동 제외 또는 대체재로 치환 후 `guardrail_reason`에 기록.
-- `input_guardrail`은 그래프 최초 진입점 — 차단 판정 시 즉시 `END`로 라우팅하고 `respond` 없이 고정 반려 메시지 반환.
+**DoD**: 후보 추천/상세판단/음성질의 각 그래프가 최소 3개 시나리오로 정상 종료(무한루프 없음)하는지 확인, Langfuse(추후) 또는 로그로 Tool 호출 순서 확인.
+
+### Step 7 — 결과 검증 & 가드레일 노드
+
+- `validate` 노드: `guardrail_service.filter_allergens`로 최종 결과에 알레르기 재료가 남아있는지 재검사.
+- `output_guardrail` 노드: 남아있으면 자동 제외 후 `guardrail_reason`에 기록.
+- `input_guardrail`은 후보 추천 그래프의 최초 진입점 — 차단 판정 시 즉시 `END`로 라우팅하고 고정 반려 메시지 반환.
 
 **DoD**: 알레르기 재료가 섞인 인위적 테스트 케이스에서 최종 응답에 해당 재료가 0건인지 확인(목표: 알레르기 노출 0건).
 
-### Step 7 — Checkpointer 연동 (멀티턴)
+### Step 8 — FastAPI 통합 + SSE + STT (`api/routes/*.py`)
 
-- `core/checkpointer.py`에서 `MemorySaver`(로컬 개발) → 필요 시 Postgres 기반 checkpointer로 교체 가능하게 인터페이스 분리.
-- `thread_id` = 대화 세션 ID로 사용, `excluded_ingredients`/`allergies`는 세션 내 계속 누적.
-- "빼줘"/"못 먹어" 같은 후속 입력은 `extract` 노드가 새 제약을 뽑아 기존 state에 merge하고, `react_agent`부터 재진입(전체 그래프를 처음부터 다시 돌리지 않음).
+- `POST /recipes/recommend` (`ingredient_ids`, `allergy_ids`) → 후보 추천 그래프 실행, SSE로 후보 3개 스트리밍.
+- `POST /recipes/{recipe_id}/detail` (`allergy_ids`) → 상세 그래프 실행, SSE로 레시피명·조리단계·대체재 스트리밍.
+- `POST /cooking/voice-query` (`recipe_id`, `allergy_ids`, `audio`) → Google Cloud Speech-to-Text로 텍스트 변환 → 음성질의 그래프 실행 → 단발 텍스트 응답 (SSE 아님).
+- 이벤트 타입(SSE 엔드포인트용): `status`(현재 노드/도구 실행 중), `token`, `final`, `error`.
 
-**DoD**: 동일 `thread_id`로 2턴 이상 호출 시 1턴의 재료/알레르기 정보가 2턴 판단에 반영되는지 통합 테스트로 확인.
-
-### Step 8 — FastAPI 통합 + SSE (`api/routes/chat.py`)
-
-- 그래프를 `graph.astream_events(..., version="v2")`로 실행하며, 노드 진입/도구 호출/최종 응답을 SSE 이벤트로 매핑해 스트리밍.
-- 이벤트 타입 예: `status`(현재 어떤 노드/도구 실행 중), `token`(응답 생성 중 토큰), `final`(최종 결과 JSON), `error`.
-
-**DoD**: `curl -N`으로 SSE 응답이 순서대로 흘러나오는지 수동 확인 + 프론트 연동 전 최소 스모크 테스트.
+**DoD**: `curl -N`으로 SSE 응답이 순서대로 흘러나오는지 확인. `voice-query`는 오디오 샘플로 STT 변환 정확도와 응답 지연을 확인하는 스모크 테스트.
 
 ### Step 9 — 테스트 & 관찰가능성
 
-- **유닛**: Service/Tool 단위(Supabase mock).
-- **통합**: 그래프 전체를 5~10개 시나리오(정상/재료 0건/알레르기 위반 시도/필수재료 제거 시도/무관 입력)로 실행.
-- **Langfuse**: `core/llm.py`의 LLM 클라이언트에 Langfuse 콜백 연결, tool 호출 순서·파라미터·지연시간이 트레이스에 남는지 확인.
+- **유닛**: Service/Tool 단위(Supabase mock, SQL 안전장치 우회 시도 포함).
+- **통합**: 세 그래프를 합쳐 5~10개 시나리오(정상/재료 0건/알레르기 위반 시도/SQL Injection·DDL·DML 시도/후보 3개 미만/음성질의 알레르기 충돌)로 실행.
+- **Langfuse**: MVP 이후 연동 예정 — 이번 범위에서는 로그 기반으로 Tool 호출 순서만 확인.
 
-**DoD**: PRD의 KPI(핵심 루프 성공률 80%, 알레르기 노출 0건, 멀티턴 100%)를 시나리오 테스트 결과로 수치화.
+**DoD**: 기획서의 KPI(핵심 루프 성공률 80%, 알레르기 노출 0건)를 시나리오 테스트 결과로 수치화.
 
-## 3. 우선 확정이 필요한 설계 이슈
+## 3. 확정된 설계 이슈 (변경 이력)
 
-- `ingredient_substitutes` 테이블 스키마 미존재 — Step 2 진행 전 확정 필요.
-- Text-to-SQL을 "자유 SQL"로 갈지 "구조화 필터"로 갈지 팀 합의 필요(본 문서는 구조화 필터를 기본값으로 제안).
-- 분류 Tool(`classify_missing_ingredients`)이 DB 조회 없이 LLM 판단만 하는 경우, Service Layer 없이 Tool이 직접 LLM을 호출하는 예외를 허용할지 여부.
+| 이슈 | 결정 |
+|---|---|
+| Text-to-SQL 방식 | ~~구조화 필터(Option B)~~ → **Option A(LLM 직접 SQL 생성) + 안전장치**로 확정 |
+| `ingredient_substitutes` 테이블 | ~~스키마 신규 설계 필요~~ → **불필요**, 대체재는 LLM이 레시피 맥락으로 즉석 판단 |
+| `ingredient_synonyms` 활용 | ~~정규화에 사용~~ → **미사용 확정**, 재료는 목록 선택(ID)만 지원, 자유 입력 없음 |
+| 알레르기/재료 전달 방식 | ~~`user_id` 기반 서버 조회~~ → **프론트가 ID 목록을 직접 전달**로 확정 |
+| Checkpointer 사용 여부 | ~~멀티턴 상태 유지~~ → **미사용, Stateless 확정** (후속 피드백 재판단 루프 제외) |
+| RAG(pgvector 유사 레시피 검색) | 이번 범위 제외 |
+| 레시피 추천 개수/판단 시점 | 부족 재료 개수 오름차순 정렬 → 상위 3개 우선 제공, **대체재 판단은 사용자가 선택한 1개에만 수행** |
+| STT 서비스 | Google Cloud Speech-to-Text로 확정 |
+| B흐름 질의 범위 | 대체재 요청 + 생략 가능 여부 질문만 포함, **조리 중 알레르기 추가·변경 언급은 반영하지 않음**(Stretch) |
 
 ## 4. 로드맵 매핑
 
 | Step | 내용 | 대략적 Day |
 |---|---|---|
-| 1~4 | State, Service, Pydantic Tool Schema, Tool 구현 | Day 3 |
-| 5 | ReAct 루프 그래프 | Day 3~4 |
-| 6 | 검증/가드레일 노드 | Day 5 |
-| 7 | Checkpointer 멀티턴 | Day 5 |
-| 8 | FastAPI + SSE | Day 4 (뼈대) → Day 5 (완성) |
-| 9 | 테스트/Langfuse | Day 6 |
+| 1 | State 정의 | Day 3 |
+| 2 | SQL 안전장치 (최우선) | Day 3 |
+| 3~5 | Service, Pydantic Tool Schema, Tool 구현 | Day 3 |
+| 6 | 후보추천/상세판단 그래프 구성 | Day 3~4 |
+| 7 | 검증/가드레일 노드 | Day 4~5 |
+| 8 | FastAPI + SSE (뼈대 Day4 → STT 통합 Day5) | Day 4~5 |
+| 9 | 테스트/관찰가능성 | Day 6 |

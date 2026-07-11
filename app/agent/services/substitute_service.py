@@ -1,0 +1,15 @@
+from app.agent.prompts.substitute_prompt import SUBSTITUTE_PROMPT
+from app.agent.tools.schemas import FindSubstitutesOutput
+from app.core.llm import get_llm
+
+
+def find(
+    ingredient_name: str, recipe_name: str, recipe_context: str | None
+) -> FindSubstitutesOutput:
+    prompt = SUBSTITUTE_PROMPT.format(
+        recipe_name=recipe_name,
+        recipe_context=recipe_context or "정보 없음",
+        ingredient_name=ingredient_name,
+    )
+    llm = get_llm().with_structured_output(FindSubstitutesOutput)
+    return llm.invoke(prompt)

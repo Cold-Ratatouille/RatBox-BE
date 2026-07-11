@@ -1,22 +1,48 @@
-"""LLM이 뽑아낸 조건을 안전하게 실행하는 계층.
+"""LLM이 생성한 SQL을 실행 전에 검증하고, 읽기 전용 커넥션으로 실행하는 계층.
 
-자유 SQL 문자열을 그대로 실행하지 않고, 화이트리스트에 등록된 필터만 조합한다.
+자유 SQL 문자열을 그대로 실행하되, sqlglot AST로 "단일 SELECT문 + 화이트리스트
+테이블만"을 강제한 뒤에만 읽기 전용 role/커넥션으로 실행한다.
 """
 
-from app.data.supabase_client import get_supabase
+import psycopg2
+import psycopg2.extras
+import sqlglot
+from sqlglot import exp
 
-ALLOWED_FILTERS = {"ingredient_ids", "max_cooking_time"}
+from app.core.config import settings
+
+ALLOWED_TABLES = {"recipes", "recipe_ingredients", "ingredients_master"}
 
 
-def execute_filtered_query(table: str, filters: dict) -> list[dict]:
-    unknown = set(filters) - ALLOWED_FILTERS
-    if unknown:
-        raise ValueError(f"허용되지 않은 필터: {unknown}")
+def validate_select_only(sql: str) -> None:
+    try:
+        statements = [s for s in sqlglot.parse(sql) if s is not None]
+    except sqlglot.errors.SqlglotError as error:
+        raise ValueError(f"SQL을 파싱할 수 없습니다: {error}") from error
 
-    supabase = get_supabase()
-    query = supabase.table(table).select("*")
-    if "ingredient_ids" in filters:
-        query = query.in_("ingredient_id", filters["ingredient_ids"])
-    if "max_cooking_time" in filters:
-        query = query.lte("cooking_time", filters["max_cooking_time"])
-    return query.execute().data
+    if len(statements) != 1:
+        raise ValueError("단일 SELECT 문만 허용됩니다.")
+
+    statement = statements[0]
+    if not isinstance(statement, exp.Select):
+        raise ValueError("SELECT 문만 허용됩니다.")
+
+    tables = {table.name for table in statement.find_all(exp.Table)}
+    disallowed = tables - ALLOWED_TABLES
+    if disallowed:
+        raise ValueError(f"허용되지 않은 테이블 접근: {disallowed}")
+
+
+def execute_readonly_sql(sql: str) -> list[dict]:
+    validate_select_only(sql)
+
+    conn = psycopg2.connect(
+        settings.database_url_readonly,
+        options=f"-c statement_timeout={settings.sql_statement_timeout_ms}",
+    )
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute(sql)
+            return [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()

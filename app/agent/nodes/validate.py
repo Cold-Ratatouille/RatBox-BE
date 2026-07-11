@@ -1,10 +1,21 @@
-"""추천 결과가 사용자 제약(알레르기 등)을 위반하지 않는지 재검증하는 노드.
+"""Phase B: LLM이 제안한 대체재가 사용자의 알레르기 성분과 충돌하는지 재검증한다."""
 
-레시피별 전체 재료 목록 조회 연동은 'LangGraph Agent 핵심구현' 이슈에서 함께 구현한다.
-"""
-
+from app.agent.services.guardrail_service import check_substitute_conflict
 from app.agent.state import AgentState
 
 
-def validate(state: AgentState) -> AgentState:
-    return state
+def validate(state: AgentState) -> dict:
+    if state.guardrail_blocked:
+        return {}
+
+    flagged = [
+        substitute.model_copy(
+            update={
+                "allergy_conflict": check_substitute_conflict(
+                    substitute.substitute_name, state.allergies
+                )
+            }
+        )
+        for substitute in state.substitutes
+    ]
+    return {"substitutes": flagged}
