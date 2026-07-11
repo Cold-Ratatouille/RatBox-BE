@@ -72,11 +72,13 @@ def test_classifies_and_finds_substitutes_for_missing(monkeypatch):
     monkeypatch.setattr(
         node_module.substitute_service,
         "find",
-        lambda ingredient_name, recipe_name, recipe_context: FindSubstitutesOutput(
-            substitutes=[
-                SubstituteCandidate(ingredient_name="대파", substitute_name="쪽파")
-            ],
-            reason="비슷한 향",
+        lambda ingredient_name, recipe_name, recipe_context, exclude_ingredients=None: (
+            FindSubstitutesOutput(
+                substitutes=[
+                    SubstituteCandidate(ingredient_name="대파", substitute_name="쪽파")
+                ],
+                reason="비슷한 향",
+            )
         ),
     )
 

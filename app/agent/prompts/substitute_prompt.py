@@ -3,8 +3,11 @@ SUBSTITUTE_PROMPT = (
     "제안하라.\n"
     "- 레시피명: {recipe_name}\n"
     "- 레시피 맥락: {recipe_context}\n"
-    "- 부족한 재료: {ingredient_name}\n\n"
+    "- 부족한 재료: {ingredient_name}\n"
+    "- 이미 이 레시피에 쓰이는 다른 재료(대체재로 추천 금지): {exclude_ingredients}\n\n"
     "이 레시피의 맛/식감을 크게 해치지 않는 대체재를 1~2개 제안하고, 각 대체재의 "
     "이름(substitute_name)과 왜 대체 가능한지 이유(reason)를 함께 답하라. "
+    "'이미 이 레시피에 쓰이는 다른 재료' 목록에 있는 재료는 이미 쓰이고 있어 대체재로서 의미가 "
+    "없으니 절대 추천하지 마라 — 그 재료들을 빼고 나서 대체재를 다시 생각하라. "
     "실제로 이 재료를 대체할 수 없다면 substitutes를 빈 리스트로 두고 이유를 설명하라."
 )

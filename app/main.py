@@ -7,6 +7,7 @@ from app.api.routes.recommend import router as recommend_router
 from app.api.routes.user import router as user_router
 from app.api.routes.user_allergen import router as user_allergen_router
 from app.core.cors import add_cors
+from app.core.observability import init_langfuse
 
 OPENAPI_TAGS = [
     {"name": "auth", "description": "회원가입/로그인/토큰 재발급"},
@@ -22,6 +23,7 @@ app = FastAPI(
     version="0.1.0",
     openapi_tags=OPENAPI_TAGS,
 )
+init_langfuse()
 add_cors(app)
 app.include_router(auth_router)
 app.include_router(allergen_router)

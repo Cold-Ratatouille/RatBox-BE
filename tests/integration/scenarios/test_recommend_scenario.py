@@ -63,8 +63,40 @@ def _script_two_tool_calls(sql: str):
     ]
 
 
+def _script_relaxed_retry(sql: str):
+    return [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "generate_sql",
+                    "args": {"ingredients": [], "strategy": "exact"},
+                    "id": "c1",
+                }
+            ],
+        ),
+        AIMessage(
+            content="", tool_calls=[{"name": "execute_sql", "args": {"sql": sql}, "id": "c2"}]
+        ),
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "generate_sql",
+                    "args": {"ingredients": [], "strategy": "relaxed"},
+                    "id": "c3",
+                }
+            ],
+        ),
+        AIMessage(
+            content="", tool_calls=[{"name": "execute_sql", "args": {"sql": sql}, "id": "c4"}]
+        ),
+        AIMessage(content="done", tool_calls=[]),
+    ]
+
+
 def _patch_search_phase(
-    monkeypatch, *, sql=FIXED_SQL, allergies=None, ingredients_by_recipe=None
+    monkeypatch, *, sql=FIXED_SQL, allergies=None, ingredients_by_recipe=None, script=None
 ):
     # ingredient_id/allergen_id -> 이름 변환은 테스트에서 굳이 실제 id를 쓸 필요가 없어
     # id를 그대로 이름처럼 사용하는 identity mock으로 대체한다.
@@ -72,7 +104,7 @@ def _patch_search_phase(
     monkeypatch.setattr(
         resolve_inputs_module, "get_allergen_names_by_ids", lambda ids: allergies or []
     )
-    scripted_llm = _ScriptedReactLLM(_script_two_tool_calls(sql))
+    scripted_llm = _ScriptedReactLLM(script if script is not None else _script_two_tool_calls(sql))
     monkeypatch.setattr(react_agent_module, "get_llm", lambda: scripted_llm)
     monkeypatch.setattr(recipe_sql_service, "get_llm", lambda: _FakeGenerateSQLLLM(sql))
     if ingredients_by_recipe is not None:
@@ -118,6 +150,29 @@ def test_zero_matching_recipes(monkeypatch):
 
     assert state.candidate_recipes == []
     assert "레시피가 없어요" in state.final_message
+
+
+def test_zero_results_retries_once_with_relaxed_strategy(monkeypatch):
+    """0건이면 LLM이 스스로 strategy=relaxed로 재시도하고, 완화 검색에서 결과를 찾으면 그걸 쓴다."""
+    call_count = {"n": 0}
+
+    def _execute_readonly_sql(sql):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return []
+        return [{"id": "1", "name": "양파계란찜", "cooking_time": 15}]
+
+    _patch_search_phase(
+        monkeypatch,
+        ingredients_by_recipe={"1": [{"name": "양파", "is_required": True}]},
+        script=_script_relaxed_retry(FIXED_SQL),
+    )
+    monkeypatch.setattr(recipe_sql_service, "execute_readonly_sql", _execute_readonly_sql)
+
+    state = graph_module.run_agent(ingredient_ids=["양파"], allergen_ids=[], recipe_id=None)
+
+    assert call_count["n"] == 2
+    assert [c.name for c in state.candidate_recipes] == ["양파계란찜"]
 
 
 def test_allergy_violation_attempt_excludes_candidate(monkeypatch):
@@ -205,9 +260,11 @@ def test_substitute_allergy_conflict_is_flagged_not_auto_suggested(monkeypatch):
     monkeypatch.setattr(
         classify_module.substitute_service,
         "find",
-        lambda ingredient_name, recipe_name, recipe_context: FindSubstitutesOutput(
-            substitutes=[SubstituteCandidate(ingredient_name="대파", substitute_name="새우")],
-            reason="테스트",
+        lambda ingredient_name, recipe_name, recipe_context, exclude_ingredients=None: (
+            FindSubstitutesOutput(
+                substitutes=[SubstituteCandidate(ingredient_name="대파", substitute_name="새우")],
+                reason="테스트",
+            )
         ),
     )
 

@@ -59,7 +59,9 @@ def test_tool_node_increments_failure_count_on_error(monkeypatch):
 def test_tool_node_does_not_touch_state_for_generate_sql(monkeypatch):
     generate_sql_tool = next(t for t in ALL_TOOLS if t.name == "generate_sql")
     monkeypatch.setattr(
-        generate_sql_tool, "func", lambda ingredients: GenerateSQLOutput(sql="SELECT 1")
+        generate_sql_tool,
+        "func",
+        lambda ingredients, strategy="exact": GenerateSQLOutput(sql="SELECT 1"),
     )
 
     state = AgentState(

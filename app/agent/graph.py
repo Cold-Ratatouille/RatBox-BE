@@ -6,6 +6,7 @@ recipe_id가 없으면 Phase A(후보 3개 추천), 있으면 Phase B(선택된 
 
 from functools import lru_cache
 
+from langfuse import observe
 from langgraph.graph import END, START, StateGraph
 
 from app.agent.nodes.classify_and_substitute import classify_and_substitute
@@ -81,6 +82,7 @@ def get_graph():
     return build_graph()
 
 
+@observe(name="recommend_graph")
 def run_agent(
     ingredient_ids: list[str], allergen_ids: list[str], recipe_id: str | None
 ) -> AgentState:
