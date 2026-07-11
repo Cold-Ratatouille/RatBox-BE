@@ -1,9 +1,4 @@
-from app.agent.services.guardrail_service import filter_allergens, is_blocked_input
-
-
-def test_is_blocked_input_detects_keyword():
-    assert is_blocked_input("이 바보야") is True
-    assert is_blocked_input("계란있어") is False
+from app.agent.services.guardrail_service import check_substitute_conflict, filter_allergens
 
 
 def test_filter_allergens_excludes_matching_recipes():
@@ -13,3 +8,11 @@ def test_filter_allergens_excludes_matching_recipes():
     ]
     filtered = filter_allergens(recipes, ["새우"])
     assert [r["name"] for r in filtered] == ["계란밥"]
+
+
+def test_check_substitute_conflict_detects_allergen_match():
+    assert check_substitute_conflict("새우", ["새우", "우유"]) is True
+
+
+def test_check_substitute_conflict_returns_false_when_safe():
+    assert check_substitute_conflict("소금", ["새우", "우유"]) is False

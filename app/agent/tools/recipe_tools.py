@@ -1,10 +1,21 @@
-from app.agent.tools.schemas import SearchRecipesInput, SearchRecipesOutput
-from app.data.mappers.recipe_mapper import map_recipe_row
-from app.data.repositories.ingredient_repository import resolve_ingredient_id
-from app.data.repositories.recipe_repository import find_recipes_by_ingredient_ids
+from langchain_core.tools import tool
+
+from app.agent.services import recipe_sql_service
+from app.agent.tools.schemas import (
+    ExecuteSQLInput,
+    ExecuteSQLOutput,
+    GenerateSQLInput,
+    GenerateSQLOutput,
+)
 
 
-def search_recipes(payload: SearchRecipesInput) -> SearchRecipesOutput:
-    ids = [i for i in (resolve_ingredient_id(name) for name in payload.ingredients) if i]
-    rows = find_recipes_by_ingredient_ids(ids)
-    return SearchRecipesOutput(recipes=[map_recipe_row(row) for row in rows])
+@tool("generate_sql", args_schema=GenerateSQLInput)
+def generate_sql(ingredients: list[str]) -> GenerateSQLOutput:
+    """보유 재료로 레시피를 찾는 SELECT SQL을 생성한다."""
+    return recipe_sql_service.generate_sql(GenerateSQLInput(ingredients=ingredients))
+
+
+@tool("execute_sql", args_schema=ExecuteSQLInput)
+def execute_sql(sql: str) -> ExecuteSQLOutput:
+    """generate_sql이 만든 SELECT문을 검증 후 읽기 전용으로 실행한다."""
+    return recipe_sql_service.execute_sql(sql)
