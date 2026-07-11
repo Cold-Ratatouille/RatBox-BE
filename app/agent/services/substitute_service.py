@@ -4,12 +4,16 @@ from app.core.llm import get_llm
 
 
 def find(
-    ingredient_name: str, recipe_name: str, recipe_context: str | None
+    ingredient_name: str,
+    recipe_name: str,
+    recipe_context: str | None,
+    exclude_ingredients: list[str] | None = None,
 ) -> FindSubstitutesOutput:
     prompt = SUBSTITUTE_PROMPT.format(
         recipe_name=recipe_name,
         recipe_context=recipe_context or "정보 없음",
         ingredient_name=ingredient_name,
+        exclude_ingredients=exclude_ingredients or [],
     )
     llm = get_llm().with_structured_output(FindSubstitutesOutput)
     return llm.invoke(prompt)

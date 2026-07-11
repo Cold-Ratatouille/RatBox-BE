@@ -31,7 +31,10 @@ def classify_and_substitute(state: AgentState) -> dict:
 
     substitutes = []
     for name in missing:
-        result = substitute_service.find(name, recipe_detail.name, recipe_detail.category)
+        other_ingredients = [n for n in full_names if n != name]
+        result = substitute_service.find(
+            name, recipe_detail.name, recipe_detail.category, other_ingredients
+        )
         substitutes.extend(result.substitutes)
 
     return {
