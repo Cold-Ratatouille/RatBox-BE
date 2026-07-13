@@ -5,5 +5,9 @@ classify_missing_ingredients/find_substitutes는 Phase B(선택 후 상세)에�
 """
 
 from app.agent.tools.recipe_tools import execute_sql, generate_sql
+from app.agent.tools.substitute_tools import find_substitutes
 
 ALL_TOOLS = [generate_sql, execute_sql]
+
+# B흐름(조리 중 음성질의)에서 react_agent가 자율 선택할 수 있는 Tool 목록.
+VOICE_TOOLS = [find_substitutes]

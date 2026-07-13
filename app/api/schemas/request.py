@@ -40,3 +40,11 @@ class UpdateMyInfoRequest(BaseModel):
 
 class ConfirmIngredientSelectionRequest(BaseModel):
     ingredient_ids: list[UUID] = Field(..., description="사용자가 화면에서 선택한 재료 id 목록")
+
+
+class VoiceQueryRequest(BaseModel):
+    recipe_id: str = Field(..., description="현재 조리 중인 레시피 id")
+    allergen_ids: list[str] = Field(
+        default_factory=list, description="사용자의 등록된 알레르기 id 목록"
+    )
+    question: str = Field(..., min_length=1, description="STT로 변환된 사용자 질문 텍스트")
