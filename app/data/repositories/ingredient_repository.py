@@ -12,15 +12,28 @@ def get_ingredient_names_by_ids(ingredient_ids: list[str]) -> list[str]:
     return [row["name"] for row in response.data]
 
 
+PAGE_SIZE = 1000
+
+
 def find_all_ingredients() -> list[dict]:
+    """Supabase(PostgREST)는 한 번의 조회당 최대 PAGE_SIZE개로 응답을 제한하므로,
+    전체 재료(4천개 이상)를 다 받으려면 range로 페이지를 나눠 반복 조회해야 한다."""
     supabase = get_supabase()
-    response = (
-        supabase.table("ingredients_master")
-        .select("id, name, description, allergen_master(id, allergen_name, category)")
-        .order("name")
-        .execute()
-    )
-    return response.data
+    rows: list[dict] = []
+    offset = 0
+    while True:
+        response = (
+            supabase.table("ingredients_master")
+            .select("id, name, description, allergen_master(id, allergen_name, category)")
+            .order("name")
+            .range(offset, offset + PAGE_SIZE - 1)
+            .execute()
+        )
+        rows.extend(response.data)
+        if len(response.data) < PAGE_SIZE:
+            break
+        offset += PAGE_SIZE
+    return rows
 
 
 def find_ingredients_by_ids(ingredient_ids: list[str]) -> list[dict]:
