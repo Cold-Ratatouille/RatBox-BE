@@ -4,7 +4,7 @@
 쓰지 않고 Service를 직접 호출한다.
 """
 
-from app.agent.services import classification_service, substitute_service
+from app.agent.services import classification_service, steps_service, substitute_service
 from app.agent.state import AgentState
 from app.data.repositories.recipe_repository import get_recipe_by_id, get_recipe_ingredient_names
 from app.domain.models import RecipeDetail
@@ -24,8 +24,16 @@ def classify_and_substitute(state: AgentState) -> dict:
     full_names = [row["name"] for row in get_recipe_ingredient_names(state.recipe_id)]
     missing = [name for name in full_names if name not in state.selected_ingredients]
 
+    steps = steps_service.generate(
+        recipe_detail.name, recipe_detail.category, recipe_detail.cooking_method, full_names
+    ).steps
+
     if not missing:
-        return {"recipe_detail": recipe_detail, "missing_ingredients": []}
+        return {
+            "recipe_detail": recipe_detail,
+            "missing_ingredients": [],
+            "cooking_steps": steps,
+        }
 
     classification = classification_service.classify(state.recipe_id, state.selected_ingredients)
 
@@ -42,4 +50,5 @@ def classify_and_substitute(state: AgentState) -> dict:
         "missing_ingredients": missing,
         "missing_classification": classification,
         "substitutes": substitutes,
+        "cooking_steps": steps,
     }
