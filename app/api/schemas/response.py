@@ -33,6 +33,7 @@ class RecipeDetailResponse(BaseModel):
     missing_ingredients: list[str] = []
     classification: ClassificationSummary | None = None
     substitutes: list[SubstituteSummary] = []
+    cooking_steps: list[str] = []
 
 
 class RecommendResponse(BaseModel):

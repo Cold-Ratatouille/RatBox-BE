@@ -22,6 +22,7 @@ class AgentState(BaseModel):
     missing_classification: ClassifyMissingOutput | None = None
     substitutes: list[SubstituteCandidate] = []
     recipe_detail: RecipeDetail | None = None
+    cooking_steps: list[str] = []
 
     react_turns: int = 0
     sql_failure_count: int = 0

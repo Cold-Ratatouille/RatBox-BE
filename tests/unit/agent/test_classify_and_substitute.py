@@ -1,6 +1,10 @@
 from app.agent.nodes import classify_and_substitute as node_module
 from app.agent.state import AgentState
-from app.agent.tools.schemas import ClassifyMissingOutput, FindSubstitutesOutput
+from app.agent.tools.schemas import (
+    ClassifyMissingOutput,
+    FindSubstitutesOutput,
+    GenerateCookingStepsOutput,
+)
 from app.domain.models import SubstituteCandidate
 
 
@@ -32,6 +36,13 @@ def test_skips_llm_calls_when_nothing_missing(monkeypatch):
         "get_recipe_ingredient_names",
         lambda recipe_id: [{"name": "계란", "is_required": True}],
     )
+    monkeypatch.setattr(
+        node_module.steps_service,
+        "generate",
+        lambda recipe_name, category, cooking_method, ingredients: GenerateCookingStepsOutput(
+            steps=["계란을 풀어 그릇에 담는다.", "팬에 기름을 두르고 익힌다."]
+        ),
+    )
 
     result = node_module.classify_and_substitute(
         AgentState(selected_ingredients=["계란"], recipe_id="r1")
@@ -39,6 +50,7 @@ def test_skips_llm_calls_when_nothing_missing(monkeypatch):
 
     assert result["missing_ingredients"] == []
     assert "missing_classification" not in result
+    assert result["cooking_steps"] == ["계란을 풀어 그릇에 담는다.", "팬에 기름을 두르고 익힌다."]
 
 
 def test_classifies_and_finds_substitutes_for_missing(monkeypatch):
@@ -81,6 +93,13 @@ def test_classifies_and_finds_substitutes_for_missing(monkeypatch):
             )
         ),
     )
+    monkeypatch.setattr(
+        node_module.steps_service,
+        "generate",
+        lambda recipe_name, category, cooking_method, ingredients: GenerateCookingStepsOutput(
+            steps=["재료를 손질한다.", "밥을 볶는다."]
+        ),
+    )
 
     result = node_module.classify_and_substitute(
         AgentState(selected_ingredients=["계란"], recipe_id="r1")
@@ -89,3 +108,4 @@ def test_classifies_and_finds_substitutes_for_missing(monkeypatch):
     assert result["missing_ingredients"] == ["대파"]
     assert result["missing_classification"].optional == ["대파"]
     assert [s.substitute_name for s in result["substitutes"]] == ["쪽파"]
+    assert result["cooking_steps"] == ["재료를 손질한다.", "밥을 볶는다."]

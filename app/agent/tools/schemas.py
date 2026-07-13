@@ -59,3 +59,10 @@ class FindSubstitutesInput(BaseModel):
 class FindSubstitutesOutput(BaseModel):
     substitutes: list[SubstituteCandidate]
     reason: str = Field(..., description="대체재 제안 근거")
+
+
+class GenerateCookingStepsOutput(BaseModel):
+    steps: list[str] = Field(
+        ...,
+        description="처음부터 완성까지의 조리 순서. 각 항목은 한 동작만 담은 짧은 문장, 3~8단계",
+    )

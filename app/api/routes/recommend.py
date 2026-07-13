@@ -48,6 +48,7 @@ def recommend(payload: RecommendRequest) -> RecommendResponse:
                 else None
             ),
             substitutes=[SubstituteSummary(**s.model_dump()) for s in state.substitutes],
+            cooking_steps=state.cooking_steps,
         )
 
     return RecommendResponse(recipes=recipes, detail=detail, message=state.final_message or "")

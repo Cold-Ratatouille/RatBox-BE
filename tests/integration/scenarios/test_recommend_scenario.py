@@ -9,6 +9,7 @@ from app.agent.services import recipe_service, recipe_sql_service
 from app.agent.tools.schemas import (
     ClassifyMissingOutput,
     FindSubstitutesOutput,
+    GenerateCookingStepsOutput,
     GenerateSQLOutput,
 )
 from app.domain.models import SubstituteCandidate
@@ -265,6 +266,13 @@ def test_substitute_allergy_conflict_is_flagged_not_auto_suggested(monkeypatch):
                 substitutes=[SubstituteCandidate(ingredient_name="대파", substitute_name="새우")],
                 reason="테스트",
             )
+        ),
+    )
+    monkeypatch.setattr(
+        classify_module.steps_service,
+        "generate",
+        lambda recipe_name, category, cooking_method, ingredients: GenerateCookingStepsOutput(
+            steps=["계란과 대파를 손질한다.", "찜기에 넣고 익힌다."]
         ),
     )
 
