@@ -41,7 +41,7 @@ async def login_route(payload: LoginRequest, response: Response) -> LoginRespons
         value=refresh_token,
         httponly=True,
         secure=settings.cookie_secure,
-        samesite="lax",
+        samesite="none",
         max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
         path="/auth",
     )
@@ -74,4 +74,9 @@ async def logout_route(
     refresh_token: str | None = Cookie(default=None, alias=REFRESH_TOKEN_COOKIE),
 ) -> None:
     logout(refresh_token)
-    response.delete_cookie(key=REFRESH_TOKEN_COOKIE, path="/auth")
+    response.delete_cookie(
+        key=REFRESH_TOKEN_COOKIE,
+        path="/auth",
+        secure=settings.cookie_secure,
+        samesite="none",
+    )
