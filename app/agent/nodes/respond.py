@@ -1,6 +1,7 @@
 """최종 자연어 응답 생성 노드. Phase A(후보 3개)와 Phase B(선택된 레시피 상세)를 구분한다."""
 
 from app.agent.state import AgentState
+from app.agent.text_utils import strip_markdown
 
 
 def respond(state: AgentState) -> dict:
@@ -36,18 +37,19 @@ def _build_detail_message(state: AgentState) -> str:
         if classification.required:
             parts.append(f"꼭 필요한 재료: {', '.join(classification.required)}")
         if classification.optional:
-            parts.append(
-                f"생략 가능한 재료: {', '.join(classification.optional)} ({classification.reason})"
-            )
+            reason = strip_markdown(classification.reason)
+            parts.append(f"생략 가능한 재료: {', '.join(classification.optional)} ({reason})")
 
     for substitute in state.substitutes:
+        ingredient_name = strip_markdown(substitute.ingredient_name)
+        substitute_name = strip_markdown(substitute.substitute_name)
         if substitute.allergy_conflict:
             parts.append(
-                f"{substitute.ingredient_name} 대신 {substitute.substitute_name}을 쓸 수 있지만 "
+                f"{ingredient_name} 대신 {substitute_name}을 쓸 수 있지만 "
                 "알레르기 성분일 수 있어요, 그래도 괜찮으실까요?"
             )
         else:
-            note = f" ({substitute.note})" if substitute.note else ""
-            parts.append(f"{substitute.ingredient_name} 대신 {substitute.substitute_name}{note}")
+            note = f" ({strip_markdown(substitute.note)})" if substitute.note else ""
+            parts.append(f"{ingredient_name} 대신 {substitute_name}{note}")
 
     return " ".join(parts)

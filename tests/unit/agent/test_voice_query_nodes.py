@@ -147,3 +147,15 @@ def test_voice_respond_uses_last_ai_message_when_no_conflict():
     result = voice_query_nodes_module.voice_respond(state)
 
     assert result["final_answer"] == "대신 두부를 쓰면 돼요."
+
+
+def test_voice_respond_strips_markdown_from_ai_message():
+    state = VoiceQueryState(
+        recipe_id="1",
+        question="q",
+        messages=[AIMessage(content="**두부**를 대신 쓰면 돼요.")],
+    )
+
+    result = voice_query_nodes_module.voice_respond(state)
+
+    assert result["final_answer"] == "두부를 대신 쓰면 돼요."
