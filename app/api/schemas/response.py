@@ -85,3 +85,7 @@ class MyInfoResponse(BaseModel):
     username: str
     name: str
     allergens: list[AllergenResponse]
+
+
+class VoiceQueryResponse(BaseModel):
+    answer: str
