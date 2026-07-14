@@ -39,6 +39,7 @@ async def _run_and_stream(payload: VoiceQueryRequest) -> AsyncIterator[str]:
             recipe_id=payload.recipe_id,
             allergen_ids=payload.allergen_ids,
             question=payload.question,
+            current_step_text=payload.current_step_text,
         )
     )
     # 대체재 질문은 react_agent<->tool_node 루프에서 LLM을 여러 번 호출해 응답을

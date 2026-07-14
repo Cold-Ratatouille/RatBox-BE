@@ -48,3 +48,10 @@ class VoiceQueryRequest(BaseModel):
         default_factory=list, description="사용자의 등록된 알레르기 id 목록"
     )
     question: str = Field(..., min_length=1, description="STT로 변환된 사용자 질문 텍스트")
+    current_step_text: str | None = Field(
+        None,
+        description=(
+            "FE가 지금 화면에 보여주고 있는 조리 단계 원문. 답변의 참고용 힌트로만 쓰이며, "
+            "이 내용을 벗어나는 질문도 일반 조리 지식으로 답변 가능하다."
+        ),
+    )

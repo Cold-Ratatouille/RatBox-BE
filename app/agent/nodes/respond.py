@@ -18,6 +18,9 @@ def respond(state: AgentState) -> dict:
 
 
 def _build_candidates_message(state: AgentState) -> str:
+    if state.final_message:
+        return state.final_message
+
     if not state.candidate_recipes:
         return "죄송해요, 그 재료 조합으로는 레시피가 없어요. 다른 재료를 추가해주세요."
 
