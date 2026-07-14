@@ -3,11 +3,16 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class IngredientRef(BaseModel):
+    name: str
+    category: str | None = None
+
+
 class RecipeSummary(BaseModel):
     id: str
     name: str
     cooking_time: int | None = None
-    missing_ingredients: list[str] = []
+    missing_ingredients: list[IngredientRef] = []
 
 
 class SubstituteSummary(BaseModel):
@@ -30,8 +35,8 @@ class RecipeDetailResponse(BaseModel):
     difficulty: str | None = None
     category: str | None = None
     cooking_method: str | None = None
-    owned_ingredients: list[str] = []
-    missing_ingredients: list[str] = []
+    owned_ingredients: list[IngredientRef] = []
+    missing_ingredients: list[IngredientRef] = []
     classification: ClassificationSummary | None = None
     substitutes: list[SubstituteSummary] = []
     cooking_steps: list[str] = []

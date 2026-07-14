@@ -97,3 +97,43 @@ def test_find_all_categories_stores_cache_with_ttl(monkeypatch):
     expected_ttl = ingredient_repository._ALL_CATEGORIES_CACHE_TTL_SECONDS
     assert json.loads(fake_redis.store[cache_key]) == [{"id": "1", "name": "카레"}]
     assert fake_redis.ex_by_key[cache_key] == expected_ttl
+
+
+class _FakeInQuery:
+    def __init__(self, data):
+        self._data = data
+
+    def select(self, *_args, **_kwargs):
+        return self
+
+    def in_(self, _column, _values):
+        return self
+
+    def execute(self):
+        return _FakeResponse(self._data)
+
+
+class _FakeSupabaseIn:
+    def __init__(self, data):
+        self._data = data
+
+    def table(self, _name):
+        return _FakeInQuery(self._data)
+
+
+def test_get_ingredient_categories_by_names_maps_name_to_category(monkeypatch):
+    fake_supabase = _FakeSupabaseIn(
+        [
+            {"name": "대파", "ingredients_category": {"name": "채소류"}},
+            {"name": "소금", "ingredients_category": None},
+        ]
+    )
+    monkeypatch.setattr(ingredient_repository, "get_supabase", lambda: fake_supabase)
+
+    result = ingredient_repository.get_ingredient_categories_by_names(["대파", "소금"])
+
+    assert result == {"대파": "채소류", "소금": None}
+
+
+def test_get_ingredient_categories_by_names_returns_empty_for_no_names():
+    assert ingredient_repository.get_ingredient_categories_by_names([]) == {}

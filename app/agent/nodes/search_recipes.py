@@ -9,6 +9,6 @@ from app.agent.state import AgentState
 @observe(name="search_recipes")
 def search_recipes(state: AgentState) -> dict:
     candidates = search_service.search_recipes(
-        state.selected_ingredients, state.min_match, state.search_limit
+        state.ingredient_ids, state.min_match, state.search_limit
     )
     return {"candidate_recipes": candidates}
