@@ -28,6 +28,14 @@ class AgentState(BaseModel):
     react_turns: int = 0
     sql_failure_count: int = 0
 
+    # search_recipes/verify_relevance 검색-검증 루프 관련 상태
+    min_match: int = 2  # 후보로 인정할 최소 재료 매칭 개수 (broaden_search가 낮춤)
+    search_limit: int = 20  # search_recipes가 가져올 후보 상한 (broaden_search가 늘림)
+    retry_count: int = 0
+    relevance_passed: bool = False
+    relevance_reason: str | None = None
+    low_confidence: bool = False
+
     guardrail_blocked: bool = False
     guardrail_reason: str | None = None
     final_message: str | None = None

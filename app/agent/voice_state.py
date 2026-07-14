@@ -15,6 +15,7 @@ class VoiceQueryState(BaseModel):
     recipe_name: str | None = None
     recipe_category: str | None = None
     question: str = ""
+    current_step_text: str | None = None  # FE가 지금 보여주고 있는 스텝 원문(참고용 힌트)
 
     substitutes: list[SubstituteCandidate] = []
     turns: int = 0

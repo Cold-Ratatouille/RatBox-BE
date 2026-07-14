@@ -66,9 +66,17 @@ def get_voice_graph():
 
 
 @observe(name="voice_query_graph")
-def run_voice_query(recipe_id: str, allergen_ids: list[str], question: str) -> VoiceQueryState:
+def run_voice_query(
+    recipe_id: str,
+    allergen_ids: list[str],
+    question: str,
+    current_step_text: str | None = None,
+) -> VoiceQueryState:
     initial_state = VoiceQueryState(
-        recipe_id=recipe_id, allergen_ids=allergen_ids, question=question
+        recipe_id=recipe_id,
+        allergen_ids=allergen_ids,
+        question=question,
+        current_step_text=current_step_text,
     )
     result = get_voice_graph().invoke(initial_state, config={"recursion_limit": 15})
     return VoiceQueryState(**result)
