@@ -19,6 +19,23 @@ def get_ingredient_names_by_ids(ingredient_ids: list[str]) -> list[str]:
     return [row["name"] for row in response.data]
 
 
+def get_ingredient_categories_by_names(names: list[str]) -> dict[str, str | None]:
+    """재료 이름 -> 카테고리명 매핑. FE가 부족/보유 재료를 카테고리별로 묶어 보여줄 때 쓴다."""
+    if not names:
+        return {}
+
+    supabase = get_supabase()
+    response = (
+        supabase.table("ingredients_master")
+        .select("name, ingredients_category(name)")
+        .in_("name", names)
+        .execute()
+    )
+    return {
+        row["name"]: (row["ingredients_category"] or {}).get("name") for row in response.data
+    }
+
+
 def _select_categories_page(offset: int, count: str | None = None):
     supabase = get_supabase()
     query = supabase.table("ingredients_category").select("id, name", count=count)

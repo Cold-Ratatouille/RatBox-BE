@@ -10,6 +10,7 @@ from app.agent.tools.schemas import (
     FindSubstitutesOutput,
     GenerateCookingStepsOutput,
 )
+from app.api.routes import recommend as recommend_module
 from app.domain.models import SubstituteCandidate
 from app.main import app
 
@@ -34,6 +35,9 @@ def _patch_search_phase(
     monkeypatch.setattr(
         resolve_inputs_module, "get_allergen_names_by_ids", lambda ids: allergies or []
     )
+    # 응답 경계에서 카테고리를 붙이는 조회 - 이 시나리오 테스트들은 카테고리 값 자체를
+    # 검증하지 않으므로 빈 매핑으로 스텁한다.
+    monkeypatch.setattr(recommend_module, "get_ingredient_categories_by_names", lambda names: {})
 
     # search_recipes()가 호출될 때마다(1차 검색, broaden_search 후 재검색, ...) 순서대로
     # 다른 데이터를 주기 위한 공유 인덱스. find_recipe_ids_by_ingredient_ids가 매
@@ -201,6 +205,7 @@ def test_substitute_allergy_conflict_is_flagged_not_auto_suggested(monkeypatch):
         resolve_inputs_module, "get_allergen_names_by_ids", lambda ids: ["새우"]
     )
     monkeypatch.setattr(resolve_inputs_module, "get_ingredient_names_by_ids", lambda ids: ids)
+    monkeypatch.setattr(recommend_module, "get_ingredient_categories_by_names", lambda names: {})
     monkeypatch.setattr(
         classify_module,
         "get_recipe_by_id",
