@@ -7,14 +7,15 @@ from app.api.schemas.request import ConfirmIngredientSelectionRequest
 from app.api.schemas.response import (
     AllergenResponse,
     ConfirmIngredientSelectionResponse,
+    IngredientCategoryResponse,
     IngredientResponse,
 )
-from app.domain.models import Allergen, Ingredient
+from app.domain.models import Allergen, Ingredient, IngredientCategory
 from app.services.ingredient_service import (
-    InvalidIngredientError,
+    CategoryNotFoundError,
     UserNotFoundError,
     confirm_ingredient_selection,
-    list_ingredients,
+    list_categories,
 )
 
 router = APIRouter(prefix="/ingredients", tags=["ingredients"])
@@ -29,6 +30,10 @@ def _to_ingredient_response(ingredient: Ingredient) -> IngredientResponse:
     )
 
 
+def _to_category_response(category: IngredientCategory) -> IngredientCategoryResponse:
+    return IngredientCategoryResponse(id=category.id, name=category.name)
+
+
 def _to_allergen_response(allergen: Allergen | None) -> AllergenResponse | None:
     if not allergen:
         return None
@@ -37,9 +42,9 @@ def _to_allergen_response(allergen: Allergen | None) -> AllergenResponse | None:
     )
 
 
-@router.get("", response_model=list[IngredientResponse])
-async def get_ingredients() -> list[IngredientResponse]:
-    return [_to_ingredient_response(i) for i in list_ingredients()]
+@router.get("", response_model=list[IngredientCategoryResponse])
+async def get_ingredients() -> list[IngredientCategoryResponse]:
+    return [_to_category_response(c) for c in list_categories()]
 
 
 @router.post("/selection", response_model=ConfirmIngredientSelectionResponse)
@@ -49,11 +54,11 @@ async def confirm_ingredient_selection_route(
 ) -> ConfirmIngredientSelectionResponse:
     try:
         ingredients, allergens = confirm_ingredient_selection(
-            user_id=user_id, ingredient_ids=payload.ingredient_ids
+            user_id=user_id, category_id=payload.category_id
         )
     except UserNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except InvalidIngredientError as exc:
+    except CategoryNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return ConfirmIngredientSelectionResponse(

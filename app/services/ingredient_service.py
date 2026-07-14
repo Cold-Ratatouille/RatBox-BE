@@ -1,36 +1,36 @@
 from uuid import UUID
 
 from app.data.repositories.ingredient_repository import (
-    find_all_ingredients,
-    find_ingredients_by_ids,
+    find_all_categories,
+    find_ingredients_by_category_id,
 )
 from app.data.repositories.user_allergen_repository import find_user_allergens
 from app.data.repositories.user_repository import find_user_by_id
-from app.domain.models import Allergen, Ingredient
+from app.domain.models import Allergen, Ingredient, IngredientCategory
 
 
 class UserNotFoundError(Exception):
     pass
 
 
-class InvalidIngredientError(Exception):
+class CategoryNotFoundError(Exception):
     pass
 
 
-def list_ingredients() -> list[Ingredient]:
-    rows = find_all_ingredients()
-    return [_to_ingredient(row) for row in rows]
+def list_categories() -> list[IngredientCategory]:
+    rows = find_all_categories()
+    return [IngredientCategory(id=row["id"], name=row["name"]) for row in rows]
 
 
 def confirm_ingredient_selection(
-    user_id: UUID, ingredient_ids: list[UUID]
+    user_id: UUID, category_id: UUID
 ) -> tuple[list[Ingredient], list[Allergen]]:
     if not find_user_by_id(str(user_id)):
         raise UserNotFoundError(f"존재하지 않는 사용자입니다: {user_id}")
 
-    ingredient_rows = find_ingredients_by_ids([str(i) for i in ingredient_ids])
-    if len(ingredient_rows) != len(set(ingredient_ids)):
-        raise InvalidIngredientError("존재하지 않는 재료가 포함되어 있습니다.")
+    ingredient_rows = find_ingredients_by_category_id(str(category_id))
+    if not ingredient_rows:
+        raise CategoryNotFoundError(f"존재하지 않거나 재료가 없는 카테고리입니다: {category_id}")
 
     allergen_rows = find_user_allergens(str(user_id))
 

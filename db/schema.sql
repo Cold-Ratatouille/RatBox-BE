@@ -6,3 +6,4 @@
 \i migrations/0004_schema_sync.sql
 \i migrations/0005_readonly_role.sql
 \i migrations/0007_readonly_rls_policy.sql
+\i migrations/0008_ingredients_category.sql

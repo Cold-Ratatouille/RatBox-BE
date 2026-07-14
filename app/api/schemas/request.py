@@ -39,7 +39,7 @@ class UpdateMyInfoRequest(BaseModel):
 
 
 class ConfirmIngredientSelectionRequest(BaseModel):
-    ingredient_ids: list[UUID] = Field(..., description="사용자가 화면에서 선택한 재료 id 목록")
+    category_id: UUID = Field(..., description="사용자가 화면에서 선택한 재료 카테고리 id")
 
 
 class VoiceQueryRequest(BaseModel):

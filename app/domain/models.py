@@ -22,6 +22,11 @@ class Ingredient(BaseModel):
     allergen: Allergen | None = None
 
 
+class IngredientCategory(BaseModel):
+    id: UUID
+    name: str
+
+
 class RecipeCandidate(BaseModel):
     id: str
     name: str

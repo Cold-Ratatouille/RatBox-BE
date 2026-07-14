@@ -77,6 +77,11 @@ class IngredientResponse(BaseModel):
     allergen: AllergenResponse | None = None
 
 
+class IngredientCategoryResponse(BaseModel):
+    id: UUID
+    name: str
+
+
 class ConfirmIngredientSelectionResponse(BaseModel):
     ingredients: list[IngredientResponse]
     allergens: list[AllergenResponse]
