@@ -15,7 +15,9 @@ def find_recipe_ids_by_ingredient_names(ingredient_names: list[str]) -> list[str
         return []
 
     recipe_ingredient_response = execute_with_retry(
-        supabase.table("recipe_ingredients").select("recipe_id").in_("ingredient_id", ingredient_ids)
+        supabase.table("recipe_ingredients")
+        .select("recipe_id")
+        .in_("ingredient_id", ingredient_ids)
     )
     return list(dict.fromkeys(row["recipe_id"] for row in recipe_ingredient_response.data))
 

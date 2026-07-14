@@ -22,7 +22,9 @@ def verify(
     selected_ingredients: list[str], candidates: list[RecipeCandidate]
 ) -> VerifyRelevanceOutput:
     if not candidates:
-        return VerifyRelevanceOutput(passed=False, reason="지금 재료로 만들 수 있는 레시피를 찾지 못했어요.")
+        return VerifyRelevanceOutput(
+            passed=False, reason="지금 재료로 만들 수 있는 레시피를 찾지 못했어요."
+        )
 
     prompt = build_verify_relevance_prompt(selected_ingredients, candidates)
     llm = get_llm().with_structured_output(VerifyRelevanceOutput)
