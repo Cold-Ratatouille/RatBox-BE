@@ -61,16 +61,18 @@ low_confidence: bool = False
 ### 새 검색 로직 (`app/agent/services/search_service.py`)
 
 ```python
-def search_recipes(selected_ingredients, min_match, limit):
-    recipe_ids = find_recipe_ids_by_ingredient_names(selected_ingredients)
+def search_recipes(ingredient_ids, min_match, limit):
+    recipe_ids = find_recipe_ids_by_ingredient_ids(ingredient_ids)
     ...
-    # 각 후보의 실제 재료와 selected_ingredients 교집합 크기(match_count)를 계산
+    # 각 후보의 실제 재료 id와 ingredient_ids 교집합 크기(match_count)를 계산
     # match_count >= min_match인 것만 남기고, match_count 내림차순 정렬 후 limit개 반환
 ```
 
 Supabase 클라이언트 기반(`app/data/repositories/recipe_repository.py`에 추가한
-`find_recipe_ids_by_ingredient_names`, `get_recipes_by_ids`)으로 구현해 기존 리포지토리
-패턴과 일치시켰고, LLM이 SQL을 짜는 방식보다 재현 가능하고 SQL 인젝션 표면도 없앴다.
+`find_recipe_ids_by_ingredient_ids`, `get_recipe_ingredient_ids`, `get_recipes_by_ids`)으로
+구현해 기존 리포지토리 패턴과 일치시켰고, LLM이 SQL을 짜는 방식보다 재현 가능하고 SQL
+인젝션 표면도 없앴다. 재료명 대신 id로 매칭해 ingredients_master 이름 왕복 조회를 없애고,
+자유 입력 표기 차이로 인한 매칭 누락도 방지한다.
 
 ### Agent 프롬프트 — `verify_relevance` (`app/agent/prompts/verify_relevance_prompt.py`)
 

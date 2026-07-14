@@ -11,16 +11,16 @@ from app.domain.models import RecipeCandidate
 def test_search_recipes_node_calls_service_with_state_params(monkeypatch):
     captured = {}
 
-    def _fake_search(selected_ingredients, min_match, limit):
-        captured["args"] = (selected_ingredients, min_match, limit)
+    def _fake_search(ingredient_ids, min_match, limit):
+        captured["args"] = (ingredient_ids, min_match, limit)
         return [RecipeCandidate(id="1", name="계란밥")]
 
     monkeypatch.setattr(search_service, "search_recipes", _fake_search)
 
-    state = AgentState(selected_ingredients=["계란"], min_match=2, search_limit=20)
+    state = AgentState(ingredient_ids=["계란-id"], min_match=2, search_limit=20)
     result = search_recipes(state)
 
-    assert captured["args"] == (["계란"], 2, 20)
+    assert captured["args"] == (["계란-id"], 2, 20)
     assert [c.id for c in result["candidate_recipes"]] == ["1"]
 
 

@@ -36,7 +36,7 @@ def _patch_search_phase(
     )
 
     # search_recipes()가 호출될 때마다(1차 검색, broaden_search 후 재검색, ...) 순서대로
-    # 다른 데이터를 주기 위한 공유 인덱스. find_recipe_ids_by_ingredient_names가 매
+    # 다른 데이터를 주기 위한 공유 인덱스. find_recipe_ids_by_ingredient_ids가 매
     # search_recipes() 호출마다 정확히 한 번 먼저 불리므로 거기서만 증가시킨다.
     call_index = {"n": -1}
     ingredients_sequence = ingredients_by_recipe if ingredients_by_recipe is not None else [{}]
@@ -45,19 +45,23 @@ def _patch_search_phase(
     def _current_idx() -> int:
         return min(max(call_index["n"], 0), len(ingredients_sequence) - 1)
 
-    def _find_recipe_ids(names):
+    def _find_recipe_ids(ids):
         call_index["n"] += 1
         return list(ingredients_sequence[_current_idx()].keys())
 
     def _get_recipe_ingredient_names(recipe_id):
         return ingredients_sequence[_current_idx()][recipe_id]
 
+    def _get_recipe_ingredient_ids(recipe_id):
+        # 테스트 데이터는 id==name(문자열 그대로)이라 이름 목록을 그대로 id 목록으로 쓴다.
+        return [row["name"] for row in ingredients_sequence[_current_idx()][recipe_id]]
+
     def _get_recipes_by_ids(ids):
         return recipes_sequence[_current_idx()]
 
-    monkeypatch.setattr(search_service, "find_recipe_ids_by_ingredient_names", _find_recipe_ids)
+    monkeypatch.setattr(search_service, "find_recipe_ids_by_ingredient_ids", _find_recipe_ids)
     monkeypatch.setattr(
-        search_service, "get_recipe_ingredient_names", _get_recipe_ingredient_names
+        search_service, "get_recipe_ingredient_ids", _get_recipe_ingredient_ids
     )
     monkeypatch.setattr(search_service, "get_recipes_by_ids", _get_recipes_by_ids)
 
