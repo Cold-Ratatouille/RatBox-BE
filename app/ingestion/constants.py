@@ -1,3 +1,7 @@
+import uuid
+
+import pandas as pd
+
 INGREDIENT_SYNONYMS = {
     "계란": ["달걀", "왕란", "계란(달걀)"],
     "밥": ["쌀밥", "흰쌀밥"],
@@ -23,6 +27,8 @@ INGREDIENT_CATEGORIES = {
     "곡류": ["밥", "밀가루", "쌀"],
     "유제품": ["우유", "치즈", "버터"],
 }
+
+INGREDIENT_CATEGORY_NAMES = [*INGREDIENT_CATEGORIES.keys(), "기타"]
 
 # 브랜드명/복합재료 표기 등 표준 재료명으로 부적절하다고 판단해 제외하기로 한 항목.
 EXCLUDED_INGREDIENT_NAMES = {
@@ -51,3 +57,12 @@ def get_ingredient_category(ingredient_name: str) -> str:
         if ingredient_name in items:
             return category
     return "기타"
+
+
+def build_ingredient_category_master() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "id": [str(uuid.uuid4()) for _ in INGREDIENT_CATEGORY_NAMES],
+            "name": INGREDIENT_CATEGORY_NAMES,
+        }
+    )

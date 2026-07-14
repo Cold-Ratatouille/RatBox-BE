@@ -9,6 +9,7 @@ from app.ingestion.allergens import build_allergen_master, resolve_allergen_id
 from app.ingestion.constants import (
     EXCLUDED_INGREDIENT_NAMES,
     SYNONYM_TO_STANDARD,
+    build_ingredient_category_master,
     get_ingredient_category,
 )
 from app.ingestion.ingredient_parser import parse_ingredient_text
@@ -111,7 +112,7 @@ def _all_ingredients_complete(raw) -> bool:
 
 def build_ingredient_tables(
     df: pd.DataFrame, recipes_df: pd.DataFrame
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     included = df.loc[recipes_df.index]
 
     rows = []
@@ -133,12 +134,17 @@ def build_ingredient_tables(
     allergen_master = build_allergen_master()
     allergen_id_by_name = dict(zip(allergen_master["allergen_name"], allergen_master["id"]))
 
+    ingredients_category = build_ingredient_category_master()
+    category_id_by_name = dict(zip(ingredients_category["name"], ingredients_category["id"]))
+
     unique_names = recipe_ingredients["ingredient_name"].unique()
     ingredients_master = pd.DataFrame(
         {
             "id": [str(uuid.uuid4()) for _ in range(len(unique_names))],
             "name": unique_names,
-            "ingredient_category": [get_ingredient_category(name) for name in unique_names],
+            "category_id": [
+                category_id_by_name[get_ingredient_category(name)] for name in unique_names
+            ],
             "allergen_id": [
                 resolve_allergen_id(name, allergen_id_by_name) for name in unique_names
             ],
@@ -152,4 +158,4 @@ def build_ingredient_tables(
         is_required=True,
     )[["id", "recipe_id", "ingredient_id", "amount", "unit", "is_required"]]
 
-    return recipe_ingredients, ingredients_master, allergen_master
+    return recipe_ingredients, ingredients_master, allergen_master, ingredients_category
