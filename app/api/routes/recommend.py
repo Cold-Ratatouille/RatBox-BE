@@ -41,6 +41,7 @@ def recommend(payload: RecommendRequest) -> RecommendResponse:
             difficulty=state.recipe_detail.difficulty,
             category=state.recipe_detail.category,
             cooking_method=state.recipe_detail.cooking_method,
+            owned_ingredients=state.owned_ingredients,
             missing_ingredients=state.missing_ingredients,
             classification=(
                 ClassificationSummary(**state.missing_classification.model_dump())

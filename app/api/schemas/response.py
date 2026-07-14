@@ -30,6 +30,7 @@ class RecipeDetailResponse(BaseModel):
     difficulty: str | None = None
     category: str | None = None
     cooking_method: str | None = None
+    owned_ingredients: list[str] = []
     missing_ingredients: list[str] = []
     classification: ClassificationSummary | None = None
     substitutes: list[SubstituteSummary] = []

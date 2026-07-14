@@ -18,6 +18,7 @@ class AgentState(BaseModel):
     allergies: list[str] = []  # resolve_inputs가 allergen_ids로부터 채움
 
     candidate_recipes: list[RecipeCandidate] = []
+    owned_ingredients: list[str] = []
     missing_ingredients: list[str] = []
     missing_classification: ClassifyMissingOutput | None = None
     substitutes: list[SubstituteCandidate] = []

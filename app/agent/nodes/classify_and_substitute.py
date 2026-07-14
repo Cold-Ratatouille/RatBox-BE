@@ -26,6 +26,7 @@ def classify_and_substitute(state: AgentState) -> dict:
 
     full_names = [row["name"] for row in get_recipe_ingredient_names(state.recipe_id)]
     missing = [name for name in full_names if name not in state.selected_ingredients]
+    owned = [name for name in full_names if name in state.selected_ingredients]
 
     steps = steps_service.generate(
         recipe_detail.name, recipe_detail.category, recipe_detail.cooking_method, full_names
@@ -34,6 +35,7 @@ def classify_and_substitute(state: AgentState) -> dict:
     if not missing:
         return {
             "recipe_detail": recipe_detail,
+            "owned_ingredients": owned,
             "missing_ingredients": [],
             "cooking_steps": steps,
         }
@@ -50,6 +52,7 @@ def classify_and_substitute(state: AgentState) -> dict:
 
     return {
         "recipe_detail": recipe_detail,
+        "owned_ingredients": owned,
         "missing_ingredients": missing,
         "missing_classification": classification,
         "substitutes": substitutes,

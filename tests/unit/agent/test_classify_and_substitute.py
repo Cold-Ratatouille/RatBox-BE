@@ -48,6 +48,7 @@ def test_skips_llm_calls_when_nothing_missing(monkeypatch):
         AgentState(selected_ingredients=["계란"], recipe_id="r1")
     )
 
+    assert result["owned_ingredients"] == ["계란"]
     assert result["missing_ingredients"] == []
     assert "missing_classification" not in result
     assert result["cooking_steps"] == ["계란을 풀어 그릇에 담는다.", "팬에 기름을 두르고 익힌다."]
@@ -105,6 +106,7 @@ def test_classifies_and_finds_substitutes_for_missing(monkeypatch):
         AgentState(selected_ingredients=["계란"], recipe_id="r1")
     )
 
+    assert result["owned_ingredients"] == ["계란"]
     assert result["missing_ingredients"] == ["대파"]
     assert result["missing_classification"].optional == ["대파"]
     assert [s.substitute_name for s in result["substitutes"]] == ["쪽파"]
