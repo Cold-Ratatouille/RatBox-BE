@@ -4,12 +4,15 @@
 쓰지 않고 Service를 직접 호출한다.
 """
 
+from langfuse import observe
+
 from app.agent.services import classification_service, steps_service, substitute_service
 from app.agent.state import AgentState
 from app.data.repositories.recipe_repository import get_recipe_by_id, get_recipe_ingredient_names
 from app.domain.models import RecipeDetail
 
 
+@observe(name="classify_and_substitute")
 def classify_and_substitute(state: AgentState) -> dict:
     recipe = get_recipe_by_id(state.recipe_id)
     if recipe is None:

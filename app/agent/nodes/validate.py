@@ -1,9 +1,12 @@
 """Phase B: LLM이 제안한 대체재가 사용자의 알레르기 성분과 충돌하는지 재검증한다."""
 
+from langfuse import observe
+
 from app.agent.services.guardrail_service import check_substitute_conflict
 from app.agent.state import AgentState
 
 
+@observe(name="validate")
 def validate(state: AgentState) -> dict:
     if state.guardrail_blocked:
         return {}
