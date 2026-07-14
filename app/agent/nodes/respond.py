@@ -1,9 +1,12 @@
 """최종 자연어 응답 생성 노드. Phase A(후보 3개)와 Phase B(선택된 레시피 상세)를 구분한다."""
 
+from langfuse import observe
+
 from app.agent.state import AgentState
 from app.agent.text_utils import strip_markdown
 
 
+@observe(name="respond")
 def respond(state: AgentState) -> dict:
     if state.guardrail_blocked:
         return {"final_message": state.final_message}

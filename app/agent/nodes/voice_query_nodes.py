@@ -6,6 +6,7 @@ LLM이 스스로 find_substitutes 툴을 호출하도록 하고, 그 외 질문�
 """
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langfuse import observe
 
 from app.agent.services.guardrail_service import check_substitute_conflict
 from app.agent.text_utils import strip_markdown
@@ -37,6 +38,7 @@ VOICE_SYSTEM_PROMPT = (
 )
 
 
+@observe(name="voice_resolve_inputs")
 def voice_resolve_inputs(state: VoiceQueryState) -> dict:
     recipe = get_recipe_by_id(state.recipe_id)
     return {
@@ -46,6 +48,7 @@ def voice_resolve_inputs(state: VoiceQueryState) -> dict:
     }
 
 
+@observe(name="voice_input_guardrail")
 def voice_input_guardrail(state: VoiceQueryState) -> dict:
     if not state.question.strip():
         return {
@@ -55,6 +58,7 @@ def voice_input_guardrail(state: VoiceQueryState) -> dict:
     return {"guardrail_blocked": False}
 
 
+@observe(name="voice_react_agent", as_type="generation")
 def voice_react_agent(state: VoiceQueryState) -> dict:
     new_messages = []
     if not state.messages:
@@ -79,6 +83,7 @@ def voice_react_agent(state: VoiceQueryState) -> dict:
     return {"messages": new_messages, "turns": state.turns + 1}
 
 
+@observe(name="voice_tool_node")
 def voice_tool_node(state: VoiceQueryState) -> dict:
     last_message = state.messages[-1]
     tool_messages = []
@@ -95,6 +100,7 @@ def voice_tool_node(state: VoiceQueryState) -> dict:
     return {"messages": tool_messages, "substitutes": substitutes}
 
 
+@observe(name="voice_validate")
 def voice_validate(state: VoiceQueryState) -> dict:
     flagged = [
         substitute.model_copy(
@@ -109,6 +115,7 @@ def voice_validate(state: VoiceQueryState) -> dict:
     return {"substitutes": flagged}
 
 
+@observe(name="voice_respond")
 def voice_respond(state: VoiceQueryState) -> dict:
     if state.guardrail_blocked:
         return {}

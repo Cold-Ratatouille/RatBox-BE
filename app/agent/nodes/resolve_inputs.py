@@ -4,11 +4,14 @@
 하고 정규화/매칭 판단은 하지 않는다.
 """
 
+from langfuse import observe
+
 from app.agent.state import AgentState
 from app.data.repositories.allergen_repository import get_allergen_names_by_ids
 from app.data.repositories.ingredient_repository import get_ingredient_names_by_ids
 
 
+@observe(name="resolve_inputs")
 def resolve_inputs(state: AgentState) -> dict:
     return {
         "selected_ingredients": get_ingredient_names_by_ids(state.ingredient_ids),
