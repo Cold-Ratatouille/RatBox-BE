@@ -111,3 +111,16 @@ def run_agent(
     )
     result = get_graph().invoke(initial_state, config={"recursion_limit": 25})
     return AgentState(**result)
+
+
+def stream_agent(ingredient_ids: list[str], allergen_ids: list[str], recipe_id: str | None):
+    """노드가 끝날 때마다 {node_name: 변경분} 을 흘려보내는 동기 제너레이터.
+
+    SSE 라우트가 이걸 스레드풀에서 한 스텝씩 당겨가며 진행상황 이벤트로 변환한다.
+    """
+    initial_state = AgentState(
+        ingredient_ids=ingredient_ids, allergen_ids=allergen_ids, recipe_id=recipe_id
+    )
+    yield from get_graph().stream(
+        initial_state, config={"recursion_limit": 25}, stream_mode="updates"
+    )
