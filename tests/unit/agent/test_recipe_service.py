@@ -26,6 +26,25 @@ def test_rank_candidates_excludes_allergen_recipes(monkeypatch):
     assert [c.id for c in ranked] == ["2"]
 
 
+def test_rank_candidates_excludes_allergen_alias_compound_words(monkeypatch):
+    # 이슈 #42: "게" 알레르기를 등록했는데도 "대게"가 든 레시피가 그대로 추천되던 버그.
+    _patch_ingredients(
+        monkeypatch,
+        {
+            "1": [{"name": "대게", "is_required": True}, {"name": "밥", "is_required": True}],
+            "2": [{"name": "계란", "is_required": True}, {"name": "밥", "is_required": True}],
+        },
+    )
+    candidates = [
+        RecipeCandidate(id="1", name="대게찜"),
+        RecipeCandidate(id="2", name="계란밥"),
+    ]
+
+    ranked = recipe_service.rank_candidates(candidates, ["밥"], allergies=["게"])
+
+    assert [c.id for c in ranked] == ["2"]
+
+
 def test_rank_candidates_sorts_by_missing_count_ascending(monkeypatch):
     _patch_ingredients(
         monkeypatch,

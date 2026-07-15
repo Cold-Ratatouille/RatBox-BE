@@ -4,6 +4,7 @@ LLM이 아니라 결정론적인 Python 로직으로 처리한다 — 정렬/필
 나와야 하는 안전 관련 로직이라 LLM 판단에 맡기지 않는다.
 """
 
+from app.agent.services.guardrail_service import is_allergen_match
 from app.data.repositories.recipe_repository import get_recipe_ingredient_names
 from app.domain.models import RecipeCandidate
 
@@ -24,14 +25,15 @@ def rank_candidates(
     candidates: list[RecipeCandidate], selected_ingredients: list[str], allergies: list[str]
 ) -> list[RecipeCandidate]:
     selected = set(selected_ingredients)
-    allergy_set = set(allergies)
 
     ranked: list[tuple[float, int, RecipeCandidate]] = []
     for candidate in candidates:
         ingredient_names = {
             row["name"] for row in get_recipe_ingredient_names(candidate.id)
         }
-        if not ingredient_names or ingredient_names & allergy_set:
+        if not ingredient_names or any(
+            is_allergen_match(name, allergies) for name in ingredient_names
+        ):
             continue
 
         missing = sorted(ingredient_names - selected)
