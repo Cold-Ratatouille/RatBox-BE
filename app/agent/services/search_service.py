@@ -51,15 +51,17 @@ def search_recipes(
         scored.append((weighted_score, recipe_id))
 
     scored.sort(key=lambda pair: pair[0], reverse=True)
-    top_ids = [recipe_id for _, recipe_id in scored[:limit]]
+    top = scored[:limit]
+    score_by_id = {recipe_id: score for score, recipe_id in top}
 
-    recipes_by_id = {recipe["id"]: recipe for recipe in get_recipes_by_ids(top_ids)}
+    recipes_by_id = {recipe["id"]: recipe for recipe in get_recipes_by_ids(list(score_by_id))}
     return [
         RecipeCandidate(
             id=recipe_id,
             name=recipes_by_id[recipe_id]["name"],
             cooking_time=recipes_by_id[recipe_id].get("cooking_time"),
+            match_score=score_by_id[recipe_id],
         )
-        for recipe_id in top_ids
+        for recipe_id in score_by_id
         if recipe_id in recipes_by_id
     ]

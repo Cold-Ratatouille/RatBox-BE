@@ -33,6 +33,7 @@ class RecipeCandidate(BaseModel):
     cooking_time: int | None = None
     missing_ingredients: list[str] = []
     matched_ingredients: list[str] = []
+    match_score: float = 0.0
 
 
 class SubstituteCandidate(BaseModel):

@@ -58,3 +58,61 @@ def test_rank_candidates_limits_to_top_three(monkeypatch):
     ranked = recipe_service.rank_candidates(candidates, ["계란"], allergies=[])
 
     assert len(ranked) == 3
+
+
+def test_rank_candidates_excludes_low_coverage_matches(monkeypatch):
+    """실제 버그 재현: 재료 5개짜리 바나나피자에 오일 1개만(20%) 겹쳐도 search_service의
+    핵심재료 하드필터만으로는 통과했었다 - 커버리지 비율(매칭/전체)이 너무 낮은 후보는
+    여기서 걸러야 한다."""
+    _patch_ingredients(
+        monkeypatch,
+        {
+            "banana-pizza": [
+                {"name": "바나나", "is_required": True},
+                {"name": "계란", "is_required": True},
+                {"name": "소금", "is_required": True},
+                {"name": "모짜렐라 치즈", "is_required": True},
+                {"name": "오일", "is_required": True},
+            ],
+            "oil-fried-egg": [
+                {"name": "계란", "is_required": True},
+                {"name": "오일", "is_required": True},
+            ],
+        },
+    )
+    candidates = [
+        RecipeCandidate(id="banana-pizza", name="바나나피자"),
+        RecipeCandidate(id="oil-fried-egg", name="계란후라이"),
+    ]
+
+    ranked = recipe_service.rank_candidates(candidates, ["오일"], allergies=[])
+
+    assert [c.id for c in ranked] == ["oil-fried-egg"]
+
+
+def test_rank_candidates_sorts_by_match_score_before_missing_count(monkeypatch):
+    """가중치 점수가 높은 후보가, 부족 재료 수가 더 적은 후보보다 우선해야 한다 -
+    search_service가 계산한 가중치가 최종 노출 순서에도 실제로 반영되는지 검증."""
+    _patch_ingredients(
+        monkeypatch,
+        {
+            "rare-core-match": [
+                {"name": "감자", "is_required": True},
+                {"name": "우유", "is_required": True},
+                {"name": "양파", "is_required": True},
+            ],
+            "fewer-missing-but-weak": [
+                {"name": "감자", "is_required": True},
+            ],
+        },
+    )
+    candidates = [
+        RecipeCandidate(id="rare-core-match", name="감자수프", match_score=1.9),
+        RecipeCandidate(id="fewer-missing-but-weak", name="감자조림", match_score=0.5),
+    ]
+
+    ranked = recipe_service.rank_candidates(
+        candidates, ["감자", "우유"], allergies=[]
+    )
+
+    assert [c.id for c in ranked] == ["rare-core-match", "fewer-missing-but-weak"]

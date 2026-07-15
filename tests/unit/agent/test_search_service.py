@@ -121,3 +121,26 @@ def test_search_recipes_ranks_rare_ingredient_match_above_more_generic_matches(m
     )
 
     assert [c.id for c in result] == ["rare-match", "generic-match"]
+
+
+def test_search_recipes_attaches_match_score_to_candidates(monkeypatch):
+    """recipe_service.rank_candidates가 최종 순위에도 가중치를 반영하려면, search_service가
+    계산한 점수가 후보 풀 선정 후 버려지지 않고 RecipeCandidate에 실려 나가야 한다."""
+    matches = {"rare-match": ["감자", "우유"]}
+    monkeypatch.setattr(
+        search_service, "find_recipe_ingredient_matches", lambda ids: matches
+    )
+    monkeypatch.setattr(
+        search_service,
+        "compute_document_frequency_ratios",
+        lambda ids: {"감자": 0.05, "우유": 0.04},
+    )
+    monkeypatch.setattr(
+        search_service,
+        "get_recipes_by_ids",
+        lambda ids: [{"id": i, "name": i, "cooking_time": None} for i in ids],
+    )
+
+    result = search_service.search_recipes(["감자", "우유"], min_match=2, limit=20)
+
+    assert result[0].match_score == (1 - 0.05) + (1 - 0.04)

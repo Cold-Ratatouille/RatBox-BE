@@ -283,7 +283,7 @@ def test_substitute_allergy_conflict_is_flagged_not_auto_suggested(monkeypatch):
         classify_module.classification_service,
         "classify",
         lambda recipe_id, available: ClassifyMissingOutput(
-            required=[], optional=["대파"], reason="향만 담당해서 생략 가능"
+            required=["대파"], optional=[], reason="향을 위한 필수 재료"
         ),
     )
     monkeypatch.setattr(

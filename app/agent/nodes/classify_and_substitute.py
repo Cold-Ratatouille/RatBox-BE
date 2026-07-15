@@ -42,8 +42,11 @@ def classify_and_substitute(state: AgentState) -> dict:
 
     classification = classification_service.classify(state.recipe_id, state.selected_ingredients)
 
+    # 생략 가능(optional)으로 분류된 재료는 없어도 조리에 지장이 없으니 대체재를 찾을
+    # 필요가 없다 - missing 전체를 돌면 "물"처럼 사실상 항상 있다고 봐도 되는 재료까지
+    # 억지로 대체재를 찾다가(예: 물 대신 계란) 엉뚱한 결과가 나온다.
     substitutes = []
-    for name in missing:
+    for name in classification.required:
         other_ingredients = [n for n in full_names if n != name]
         result = substitute_service.find(
             name,
