@@ -18,8 +18,10 @@ Experiment Run으로 기록한다.
   쏠리는지 확인한다 (전복죽 3개 재료 vs 두부찌개 12개 재료 같은 케이스).
 
 GENERIC_DF_RATIO_THRESHOLD(0.15)는 지금 단계에서 근거가 되는 라벨링 데이터가 없어
-소금(35.6%)과 감자(5.5%) 실측치 사이에서 잡은 잠정값이다. 사람이 트레이스를 보고
-pass/fail 라벨을 채워 넣으면 그 데이터로 재보정해야 한다.
+소금(28.1%)과 감자(5.1%) 실측치 사이에서 잡은 잠정값이다. 사람이 트레이스를 보고
+pass/fail 라벨을 채워 넣으면 그 데이터로 재보정해야 한다. search_service가 실제
+추천에 쓰는 것과 동일한 임계값/df 계산 함수를 그대로 가져다 쓴다 - 평가 스크립트가
+따로 재구현하면 둘이 조용히 어긋날 수 있어서다.
 """
 
 import statistics
@@ -28,14 +30,26 @@ from datetime import datetime, timezone
 from langfuse import Evaluation
 
 from app.agent.graph import run_agent
+from app.agent.services.ingredient_weight_service import GENERIC_DF_RATIO_THRESHOLD
 from app.core.observability import init_langfuse
-from app.data.repositories.recipe_repository import get_recipe_ingredient_names
 from app.data.repositories.ingredient_repository import resolve_ingredient_id
-from app.data.supabase_client import get_supabase
+from app.data.repositories.recipe_repository import (
+    get_ingredient_document_frequency,
+    get_recipe_ingredient_names,
+    get_total_recipe_count,
+)
 from scripts.eval.golden_set import GOLDEN_CASES
 
 DATASET_NAME = "recommend-golden-set-v1"
-GENERIC_DF_RATIO_THRESHOLD = 0.15
+
+# 알고리즘을 바꿀 때마다 이 세 값을 갱신하고 다시 실행하면, Langfuse Dataset의 run들이
+# 시간순으로 쌓여 개선 전/후를 나란히 비교할 수 있다.
+RUN_LABEL = "post-a1-ingredient-weighting"
+RUN_DESCRIPTION = (
+    "A-1: search_recipes에 재료 문서빈도 기반 가중치 + 핵심재료 하드필터 적용 후"
+    " (베이스라인 run: recommend-quality-baseline 최초 실행, phase=baseline)"
+)
+ALGORITHM_VERSION = "v1-df-weighted"
 
 
 def _resolve_case(case: dict) -> dict:
@@ -46,33 +60,6 @@ def _resolve_case(case: dict) -> dict:
             raise ValueError(f"골든셋 재료명을 ingredients_master에서 못 찾음: {name}")
         ids.append(ingredient_id)
     return {**case, "ingredient_ids": ids}
-
-
-def _total_recipe_count() -> int:
-    supabase = get_supabase()
-    response = supabase.table("recipes").select("id", count="exact").limit(1).execute()
-    return response.count or 0
-
-
-def _compute_document_frequency(ingredient_ids: list[str]) -> dict[str, int]:
-    """각 ingredient_id가 몇 개의 레시피에 쓰이는지. 소금처럼 흔한 재료와 감자처럼
-    상대적으로 드문 재료를 구분하는 근거 데이터.
-
-    재료 id를 한 번에 묶어서 조회하면(find_recipe_ingredient_matches) 소금처럼 많은
-    레시피에 쓰이는 재료가 있을 때 결과 행 수가 PostgREST 기본 응답 상한(1000행)을
-    넘겨서 조용히 잘릴 수 있다 - 재료 하나씩 count="exact"로 정확한 총량만 받는다."""
-    supabase = get_supabase()
-    df: dict[str, int] = {}
-    for ingredient_id in ingredient_ids:
-        response = (
-            supabase.table("recipe_ingredients")
-            .select("recipe_id", count="exact")
-            .eq("ingredient_id", ingredient_id)
-            .limit(1)
-            .execute()
-        )
-        df[ingredient_id] = response.count or 0
-    return df
 
 
 def _build_task(name_to_id: dict[str, str], df: dict[str, int], total_recipes: int):
@@ -202,8 +189,8 @@ def main() -> None:
     }
 
     print(f"[1/4] 코퍼스 통계 계산 중... (재료 {len(all_ids)}종)")
-    total_recipes = _total_recipe_count()
-    df = _compute_document_frequency(all_ids)
+    total_recipes = get_total_recipe_count()
+    df = get_ingredient_document_frequency(all_ids)
     for case in resolved_cases:
         ratios = [
             f"{name}={df[i]}/{total_recipes}({df[i] / total_recipes:.1%})"
@@ -235,13 +222,13 @@ def main() -> None:
         )
     print(f"  {len(resolved_cases)}개 케이스 등록 완료")
 
-    print("\n[3/4] 베이스라인 실행 (run_agent, 현재 알고리즘 그대로) 중...")
+    print("\n[3/4] 실행 (run_agent, 현재 알고리즘 그대로) 중...")
     dataset = client.get_dataset(DATASET_NAME)
-    run_name = f"baseline-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+    run_name = f"{RUN_LABEL}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
     result = client.run_experiment(
         name="recommend-quality-baseline",
         run_name=run_name,
-        description="A-1(가중치)/A-2(재시도) 개선 전 현재 알고리즘 베이스라인",
+        description=RUN_DESCRIPTION,
         data=dataset.items,
         task=_build_task(name_to_id, df, total_recipes),
         evaluators=[
@@ -257,7 +244,7 @@ def main() -> None:
             _aggregate_zero_candidate_rate,
         ],
         max_concurrency=4,
-        metadata={"phase": "baseline", "algorithm_version": "v0-raw-count"},
+        metadata={"phase": RUN_LABEL, "algorithm_version": ALGORITHM_VERSION},
     )
 
     print(f"\n[4/4] 완료. Dataset run URL:\n  {result.dataset_run_url}\n")
