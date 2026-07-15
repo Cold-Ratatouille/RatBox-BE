@@ -69,7 +69,7 @@ def search_recipes(ingredient_ids, min_match, limit):
 ```
 
 Supabase 클라이언트 기반(`app/data/repositories/recipe_repository.py`에 추가한
-`find_recipe_ids_by_ingredient_ids`, `get_recipe_ingredient_ids`, `get_recipes_by_ids`)으로
+`find_recipe_ingredient_matches`, `get_recipes_by_ids`)으로
 구현해 기존 리포지토리 패턴과 일치시켰고, LLM이 SQL을 짜는 방식보다 재현 가능하고 SQL
 인젝션 표면도 없앴다. 재료명 대신 id로 매칭해 ingredients_master 이름 왕복 조회를 없애고,
 자유 입력 표기 차이로 인한 매칭 누락도 방지한다.
