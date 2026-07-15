@@ -254,7 +254,6 @@ def main() -> None:
 
     print("\n=== Item-level summary ===")
     for r in result.item_results:
-        case_id = r.item.metadata.get("notes", "")[:20] if r.item.metadata else ""
         by_name = {e.name: e.value for e in r.evaluations}
         print(f"  {r.item.id}: {by_name}")
 
