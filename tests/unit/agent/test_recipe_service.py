@@ -44,6 +44,9 @@ def test_rank_candidates_sorts_by_missing_count_ascending(monkeypatch):
     assert [c.id for c in ranked] == ["2", "1"]
     assert ranked[0].missing_ingredients == []
     assert ranked[1].missing_ingredients == ["대파"]
+    # verify_relevance가 "왜 매칭됐는지" 볼 수 있도록 겹치는 재료도 같이 채워야 한다.
+    assert ranked[0].matched_ingredients == ["계란"]
+    assert ranked[1].matched_ingredients == ["계란"]
 
 
 def test_rank_candidates_limits_to_top_three(monkeypatch):

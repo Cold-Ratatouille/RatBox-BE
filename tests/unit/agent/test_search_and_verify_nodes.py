@@ -39,20 +39,32 @@ def test_verify_relevance_node_reflects_service_result(monkeypatch):
     assert result == {"relevance_passed": True, "relevance_reason": "재료 활용도가 좋아요"}
 
 
-def test_broaden_search_lowers_min_match_and_raises_limit():
+def test_broaden_search_first_stage_lowers_min_match_only():
+    """1단계: min_match가 아직 floor보다 높으면 그것만 낮춘다. search_limit은 아직
+    안 건드려야 2단계에서 쓸 완화 여지가 남는다."""
     state = AgentState(min_match=2, search_limit=20, retry_count=0)
 
     result = broaden_search(state)
 
-    assert result == {"min_match": 1, "search_limit": 40, "retry_count": 1}
+    assert result == {"min_match": 1, "retry_count": 1}
 
 
-def test_broaden_search_floors_and_caps():
-    state = AgentState(min_match=1, search_limit=40, retry_count=1)
+def test_broaden_search_second_stage_raises_search_limit_instead():
+    """2단계: min_match가 이미 floor(1)라 더 못 낮추니, 대신 search_limit을 크게
+    늘려 rank_candidates가 더 넓은 후보 풀을 보게 한다."""
+    state = AgentState(min_match=1, search_limit=20, retry_count=1)
 
     result = broaden_search(state)
 
-    assert result == {"min_match": 1, "search_limit": 40, "retry_count": 2}
+    assert result == {"search_limit": 60, "retry_count": 2}
+
+
+def test_broaden_search_second_stage_keeps_larger_existing_limit():
+    state = AgentState(min_match=1, search_limit=80, retry_count=1)
+
+    result = broaden_search(state)
+
+    assert result == {"search_limit": 80, "retry_count": 2}
 
 
 def test_best_effort_response_includes_reason_and_candidates():

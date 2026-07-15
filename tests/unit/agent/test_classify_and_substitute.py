@@ -82,18 +82,22 @@ def test_classifies_and_finds_substitutes_for_missing(monkeypatch):
             required=[], optional=["대파"], reason="생략 가능"
         ),
     )
-    monkeypatch.setattr(
-        node_module.substitute_service,
-        "find",
-        lambda ingredient_name, recipe_name, recipe_context, exclude_ingredients=None: (
-            FindSubstitutesOutput(
-                substitutes=[
-                    SubstituteCandidate(ingredient_name="대파", substitute_name="쪽파")
-                ],
-                reason="비슷한 향",
-            )
-        ),
-    )
+    substitute_find_calls = []
+
+    def _fake_find(
+        ingredient_name,
+        recipe_name,
+        recipe_context,
+        exclude_ingredients=None,
+        owned_ingredients=None,
+    ):
+        substitute_find_calls.append(owned_ingredients)
+        return FindSubstitutesOutput(
+            substitutes=[SubstituteCandidate(ingredient_name="대파", substitute_name="쪽파")],
+            reason="비슷한 향",
+        )
+
+    monkeypatch.setattr(node_module.substitute_service, "find", _fake_find)
     monkeypatch.setattr(
         node_module.steps_service,
         "generate",
@@ -111,3 +115,5 @@ def test_classifies_and_finds_substitutes_for_missing(monkeypatch):
     assert result["missing_classification"].optional == ["대파"]
     assert [s.substitute_name for s in result["substitutes"]] == ["쪽파"]
     assert result["cooking_steps"] == ["재료를 손질한다.", "밥을 볶는다."]
+    # 대체재를 찾을 때 사용자가 이미 가진 재료(계란)를 넘겨줘야 그걸 우선 추천할 수 있다.
+    assert substitute_find_calls == [["계란"]]

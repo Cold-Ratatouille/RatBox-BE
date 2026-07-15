@@ -289,7 +289,8 @@ def test_substitute_allergy_conflict_is_flagged_not_auto_suggested(monkeypatch):
     monkeypatch.setattr(
         classify_module.substitute_service,
         "find",
-        lambda ingredient_name, recipe_name, recipe_context, exclude_ingredients=None: (
+        lambda ingredient_name, recipe_name, recipe_context, exclude_ingredients=None,
+        owned_ingredients=None: (
             FindSubstitutesOutput(
                 substitutes=[SubstituteCandidate(ingredient_name="대파", substitute_name="새우")],
                 reason="테스트",

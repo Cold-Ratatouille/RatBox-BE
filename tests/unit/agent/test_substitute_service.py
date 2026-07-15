@@ -48,3 +48,17 @@ def test_find_includes_exclude_ingredients_in_prompt(monkeypatch):
 
     assert "마늘" in fake_llm.last_structured.last_prompt
     assert "샐러리" in fake_llm.last_structured.last_prompt
+
+
+def test_find_includes_owned_ingredients_in_prompt(monkeypatch):
+    """사용자가 이미 가진 재료를 프롬프트에 넘겨야 LLM이 그걸 우선 추천할 수 있다."""
+    expected = FindSubstitutesOutput(substitutes=[], reason="대체 불가")
+    fake_llm = _FakeLLM(expected)
+    monkeypatch.setattr(substitute_service, "get_llm", lambda: fake_llm)
+
+    substitute_service.find(
+        "멸치육수", "된장찌개", "국/탕", owned_ingredients=["물", "된장"]
+    )
+
+    assert "물" in fake_llm.last_structured.last_prompt
+    assert "된장" in fake_llm.last_structured.last_prompt
