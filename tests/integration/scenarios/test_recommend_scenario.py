@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from app.agent import graph as graph_module
@@ -15,6 +17,30 @@ from app.domain.models import SubstituteCandidate
 from app.main import app
 
 client = TestClient(app)
+
+
+def _sse_events(text: str) -> list[tuple[str, dict]]:
+    """`/recommend`가 SSE로 흘려보낸 본문을 (event, data) 목록으로 파싱한다."""
+    events = []
+    for raw in text.split("\n\n"):
+        if not raw.strip():
+            continue
+        event = "message"
+        data = None
+        for line in raw.splitlines():
+            if line.startswith("event: "):
+                event = line[len("event: ") :]
+            elif line.startswith("data: "):
+                data = line[len("data: ") :]
+        if data is not None:
+            events.append((event, json.loads(data)))
+    return events
+
+
+def _final_payload(response) -> dict:
+    events = _sse_events(response.text)
+    final = next(data for event, data in events if event == "final")
+    return final
 
 
 def _patch_search_phase(
@@ -114,8 +140,27 @@ def test_normal_flow_returns_top_recipes(monkeypatch):
     response = client.post("/recommend", json={"ingredient_ids": ["계란"]})
 
     assert response.status_code == 200
-    body = response.json()
+    body = _final_payload(response)
     assert {r["name"] for r in body["recipes"]} == {"계란밥", "대파계란찜"}
+
+
+def test_streams_status_events_before_final(monkeypatch):
+    """노드가 끝날 때마다 status 이벤트가 흘러나오고, 마지막에 final+done이 온다."""
+    _patch_search_phase(
+        monkeypatch,
+        ingredients_by_recipe=[{"1": [{"name": "계란"}]}],
+        recipes_by_id=[[{"id": "1", "name": "계란밥", "cooking_time": 10}]],
+    )
+
+    response = client.post("/recommend", json={"ingredient_ids": ["계란"]})
+
+    events = _sse_events(response.text)
+    event_names = [event for event, _ in events]
+    assert "status" in event_names
+    assert event_names[-2:] == ["final", "done"]
+    status_nodes = {data["node"] for event, data in events if event == "status"}
+    assert "search_recipes" in status_nodes
+    assert "respond" in status_nodes
 
 
 def test_zero_matching_recipes_asks_clarification_after_broadening(monkeypatch):
