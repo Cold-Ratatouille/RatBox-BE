@@ -1,30 +1,26 @@
 from app.data.supabase_client import execute_with_retry, get_supabase
 
 
-def find_recipe_ids_by_ingredient_ids(ingredient_ids: list[str]) -> list[str]:
-    """ingredient_ids 중 하나라도 쓰이는 레시피 id 목록(중복 제거, 순서 유지)을 반환한다.
+def find_recipe_ingredient_matches(ingredient_ids: list[str]) -> dict[str, list[str]]:
+    """ingredient_ids 중 하나라도 쓰이는 레시피별로, 실제 겹치는 ingredient_id 목록을 묶어 반환한다.
 
-    카테고리 선택이 넘겨주는 id를 그대로 쓴다 - ingredients_master를 이름으로 되짚어
-    id를 다시 조회하던 왕복 쿼리를 없앤다."""
+    후보 recipe_id마다 재료 목록을 왕복 쿼리로 하나씩 가져오면(N+1) 후보가 많을 때
+    지연이 누적되므로, 매칭 계산에 필요한 (recipe_id, ingredient_id) 쌍을 애초에
+    ingredient_ids(사용자가 고른 소수의 재료) 기준 단 한 번의 쿼리로 가져온다. recipe_id
+    기준으로 필터링하면 후보가 많을 때 쿼리 URL이 너무 길어질 수 있어 피한다."""
     if not ingredient_ids:
-        return []
+        return {}
 
-    supabase = get_supabase()
-    recipe_ingredient_response = execute_with_retry(
-        supabase.table("recipe_ingredients")
-        .select("recipe_id")
-        .in_("ingredient_id", ingredient_ids)
-    )
-    return list(dict.fromkeys(row["recipe_id"] for row in recipe_ingredient_response.data))
-
-
-def get_recipe_ingredient_ids(recipe_id: str) -> list[str]:
-    """후보 검색 단계의 매칭 개수 계산 전용 - ingredients_master 조인 없이 id만 가져온다."""
     supabase = get_supabase()
     response = execute_with_retry(
-        supabase.table("recipe_ingredients").select("ingredient_id").eq("recipe_id", recipe_id)
+        supabase.table("recipe_ingredients")
+        .select("recipe_id, ingredient_id")
+        .in_("ingredient_id", ingredient_ids)
     )
-    return [row["ingredient_id"] for row in response.data]
+    matches: dict[str, list[str]] = {}
+    for row in response.data:
+        matches.setdefault(row["recipe_id"], []).append(row["ingredient_id"])
+    return matches
 
 
 def get_recipes_by_ids(recipe_ids: list[str]) -> list[dict]:
