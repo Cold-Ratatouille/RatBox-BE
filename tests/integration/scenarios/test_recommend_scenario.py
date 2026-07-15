@@ -97,6 +97,11 @@ def _patch_search_phase(
         search_service, "find_recipe_ingredient_matches", _find_recipe_ingredient_matches
     )
     monkeypatch.setattr(search_service, "get_recipes_by_ids", _get_recipes_by_ids)
+    # 이 시나리오 테스트들은 재료 가중치/핵심재료 판별 로직 자체를 검증하지 않으므로,
+    # 모든 재료를 희귀(코어) 재료로 취급해 기존 매칭개수 기준 동작이 그대로 보이게 한다.
+    monkeypatch.setattr(
+        search_service, "compute_document_frequency_ratios", lambda ids: {i: 0.0 for i in ids}
+    )
 
     # rank_candidates(기존, 변경 없음)도 recipe_service.get_recipe_ingredient_names를 쓴다.
     from app.agent.services import recipe_service
@@ -284,7 +289,8 @@ def test_substitute_allergy_conflict_is_flagged_not_auto_suggested(monkeypatch):
     monkeypatch.setattr(
         classify_module.substitute_service,
         "find",
-        lambda ingredient_name, recipe_name, recipe_context, exclude_ingredients=None: (
+        lambda ingredient_name, recipe_name, recipe_context, exclude_ingredients=None,
+        owned_ingredients=None: (
             FindSubstitutesOutput(
                 substitutes=[SubstituteCandidate(ingredient_name="대파", substitute_name="새우")],
                 reason="테스트",

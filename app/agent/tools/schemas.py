@@ -54,6 +54,10 @@ class FindSubstitutesInput(BaseModel):
             "대체재로 추천하면 안 됨(이미 쓰이고 있어 무의미)."
         ),
     )
+    owned_ingredients: list[str] = Field(
+        default_factory=list,
+        description="사용자가 이미 가진 재료명 목록. 대체재를 고를 때 이 중에서 우선 추천해야 함.",
+    )
 
 
 class FindSubstitutesOutput(BaseModel):

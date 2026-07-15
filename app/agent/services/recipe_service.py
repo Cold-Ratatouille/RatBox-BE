@@ -25,7 +25,15 @@ def rank_candidates(
             continue
 
         missing = sorted(ingredient_names - selected)
-        ranked.append((len(missing), candidate.model_copy(update={"missing_ingredients": missing})))
+        matched = sorted(ingredient_names & selected)
+        ranked.append(
+            (
+                len(missing),
+                candidate.model_copy(
+                    update={"missing_ingredients": missing, "matched_ingredients": matched}
+                ),
+            )
+        )
 
     ranked.sort(key=lambda pair: pair[0])
     return [candidate for _, candidate in ranked[:TOP_N]]

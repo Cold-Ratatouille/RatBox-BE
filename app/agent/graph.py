@@ -31,7 +31,7 @@ from app.agent.nodes.validate import validate
 from app.agent.nodes.verify_relevance import verify_relevance
 from app.agent.state import AgentState
 
-MAX_SEARCH_RETRIES = 1
+MAX_SEARCH_RETRIES = 2
 
 
 def _route_after_input_guardrail(state: AgentState) -> str:
